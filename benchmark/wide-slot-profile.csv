@@ -1,0 +1,219 @@
+build,function,self_samples,inclusive_samples,total_samples
+before,Encoder._wideSlots,689,858,6335
+before,Encoder._collectionSlot,570,1549,6335
+before,Encoder._map,512,6179,6335
+before,MapFields._field,436,470,6335
+before,HashMap.[],359,513,6335
+before,Encoder.writeValue,327,6330,6335
+before,Output.text,308,550,6335
+before,Encoder._child,290,6272,6335
+before,[dartaotruntime],287,406,6335
+before,LinkedHashMapMixin.forEach,233,714,6335
+before,Int64List.[]=,188,188,6335
+before,Int64List.[],181,181,6335
+before,Encoder._end,169,1751,6335
+before,Output.blob,134,333,6335
+before,Encoder._stringSlot,125,1473,6335
+before,String.==,123,123,6335
+before,Encoder._begin,114,114,6335
+before,ListIterator.moveNext,96,124,6335
+before,HashMap._resize,94,125,6335
+before,Array.length,89,89,6335
+before,_platform_memmove,84,84,6335
+before,Encoder._scalarSpace,52,61,6335
+before,Encoder._word,48,89,6335
+before,__psynch_cvwait,45,45,6335
+before,HashMap.[]=,38,262,6335
+before,HashMap._addEntry,37,200,6335
+before,stub AllocateUint8Array,36,120,6335
+before,stub AllocateContext,36,44,6335
+before,MapFields.load,34,775,6335
+before,Encoder._blobSpace,32,162,6335
+before,String.hashCode,30,30,6335
+before,__psynch_mutexwait,28,28,6335
+before,putLittle,28,32,6335
+before,Encoder._position,26,26,6335
+before,Encoder.endArray,22,665,6335
+before,LinkedHashMapMixin.length,22,22,6335
+before,stub Subtype1TestCache,22,22,6335
+before,FleeceGeometry._writePayload,21,364,6335
+before,Encoder.writeString,21,142,6335
+before,varintSize,20,20,6335
+before,Encoder._nativeInt,17,108,6335
+before,stub AllocateObject,17,17,6335
+before,Encoder._finiteDouble,17,64,6335
+before,FleeceInt._writePayload,16,79,6335
+before,Encoder.writeInt,15,75,6335
+before,stub AllocateArray,15,25,6335
+before,ListIterator.current,14,14,6335
+before,Encoder.endDict,13,1129,6335
+before,Encoder.beginArray,12,89,6335
+before,Encoder._boundedInteger,12,64,6335
+before,List.elementAt,12,12,6335
+before,__psynch_cvbroad,10,10,6335
+before,Encoder._floatStorage,10,39,6335
+before,mach_msg2_trap,10,10,6335
+before,assert type is int,9,9,6335
+before,FleeceSeconds._writePayload,9,99,6335
+before,"assert type is (double, double)",8,8,6335
+before,__psynch_mutexdrop,8,8,6335
+before,Encoder.beginDict,8,45,6335
+before,FleeceRecordId._writePayload,8,450,6335
+before,int.bitLength,8,8,6335
+before,Encoder.writeF64,8,72,6335
+before,FleeceSet._payload,8,8,6335
+before,asF32,7,7,6335
+before,stub AllocateObjectParameterized,7,7,6335
+before,stub ArrayWriteBarrier,6,29,6335
+before,assert type is String,6,6,6335
+before,List.iterator,6,25,6335
+before,stub AllocateInt64Array,5,6,6335
+before,pthread_mutex_unlock,5,5,6335
+before,__psynch_cvsignal,5,5,6335
+before,FleeceGeometry.kind,3,3,6335
+before,Dart_WriteProfileToTimeline,2,2,6335
+before,Sort._insertionSort,2,4,6335
+before,pthread_mutex_lock,2,2,6335
+before,FleeceRecordId.kind,2,2,6335
+before,compareNames,2,2,6335
+before,Output._grow,1,228,6335
+before,_pthread_mutex_firstfit_lock_wait,1,29,6335
+before,mach_continuous_time,1,1,6335
+before,_tlv_get_addr,1,1,6335
+before,new Encoder,1,1,6335
+before,measure,0,6335,6335
+before,main.<anonymous closure>,0,6335,6335
+before,encode,0,6335,6335
+before,stub StackOverflowSharedWithoutFPURegs,0,250,6335
+before,stub CallToRuntime,0,382,6335
+before,[<unknown binary>],0,83,6335
+before,_pthread_cond_wait,0,45,6335
+before,pthread_cond_broadcast,0,10,6335
+before,_pthread_mutex_firstfit_lock_slow,0,29,6335
+before,stub AllocateObjectSlow,0,29,6335
+before,_realloc,0,1,6335
+before,_malloc_zone_realloc,0,1,6335
+before,xzm_malloc_zone_malloc_type_realloc,0,1,6335
+before,_pthread_mutex_firstfit_unlock_slow,0,8,6335
+before,_pthread_mutex_firstfit_wake,0,8,6335
+before,Encoder._growSlots,0,6,6335
+before,ListBase.sort,0,4,6335
+before,Sort.sort,0,4,6335
+before,Sort._doSort,0,4,6335
+before,pthread_cond_signal,0,5,6335
+before,stub WriteBarrierWrappers,0,1,6335
+before,stub WriteBarrier,0,1,6335
+before,vm_map,0,10,6335
+before,_kernelrpc_vm_map,0,10,6335
+before,mach_msg2_internal,0,10,6335
+before,clock_gettime_nsec_np,0,1,6335
+before,new ByteData.sublistView,0,24,6335
+before,MapFields.load.<anonymous closure>,0,2,6335
+after,MapFields._field,581,619,6292
+after,Encoder._wideSlots,510,521,6292
+after,HashMap.[],501,664,6292
+after,Encoder._collectionSlot,473,1044,6292
+after,Encoder.writeValue,426,6290,6292
+after,Encoder._map,423,6121,6292
+after,Output.text,421,741,6292
+after,Encoder._child,364,6234,6292
+after,LinkedHashMapMixin.forEach,262,890,6292
+after,[dartaotruntime],198,315,6292
+after,Output.blob,170,418,6292
+after,Encoder._stringSlot,160,1866,6292
+after,Encoder._end,153,1197,6292
+after,Encoder._begin,143,144,6292
+after,String.==,136,136,6292
+after,_platform_memmove,105,105,6292
+after,HashMap.[]=,72,276,6292
+after,HashMap._resize,72,98,6292
+after,ListIterator.moveNext,69,103,6292
+after,Encoder._scalarSpace,55,57,6292
+after,Encoder._blobSpace,53,170,6292
+after,Encoder._word,50,82,6292
+after,HashMap._addEntry,43,186,6292
+after,MapFields.load,41,954,6292
+after,stub AllocateContext,40,50,6292
+after,Encoder._position,39,39,6292
+after,__psynch_cvwait,34,34,6292
+after,Encoder.writeString,34,121,6292
+after,stub AllocateUint8Array,33,101,6292
+after,Encoder._nativeInt,32,116,6292
+after,FleeceGeometry._writePayload,29,369,6292
+after,stub Subtype1TestCache,29,29,6292
+after,__psynch_mutexwait,28,28,6292
+after,putLittle,28,34,6292
+after,String.hashCode,26,26,6292
+after,stub AllocateObject,26,26,6292
+after,Encoder._finiteDouble,23,69,6292
+after,varintSize,21,21,6292
+after,Array.length,20,20,6292
+after,ListIterator.current,20,20,6292
+after,Encoder.writeInt,19,71,6292
+after,Encoder.beginDict,19,67,6292
+after,FleeceSeconds._writePayload,18,116,6292
+after,Encoder.endArray,16,490,6292
+after,FleeceInt._writePayload,16,93,6292
+after,Encoder.endDict,15,739,6292
+after,Encoder.writeF64,15,83,6292
+after,stub AllocateObjectParameterized,15,15,6292
+after,Encoder.beginArray,14,108,6292
+after,asF32,13,13,6292
+after,mach_msg2_trap,13,13,6292
+after,stub AllocateArray,13,18,6292
+after,"assert type is (double, double)",12,12,6292
+after,List.elementAt,12,12,6292
+after,__psynch_cvsignal,11,11,6292
+after,LinkedHashMapMixin.length,11,11,6292
+after,stub ArrayWriteBarrier,10,42,6292
+after,__psynch_mutexdrop,10,10,6292
+after,Encoder._boundedInteger,10,77,6292
+after,Encoder._floatStorage,10,33,6292
+after,FleeceRecordId._writePayload,9,355,6292
+after,int.bitLength,9,9,6292
+after,FleeceRecordId.kind,7,7,6292
+after,assert type is String,7,7,6292
+after,pthread_mutex_unlock,6,6,6292
+after,FleeceSet._payload,6,6,6292
+after,pthread_mutex_lock,5,5,6292
+after,List.iterator,4,25,6292
+after,mach_continuous_time,4,4,6292
+after,__psynch_cvbroad,4,4,6292
+after,stub AllocateInt64Array,3,3,6292
+after,assert type is int,2,2,6292
+after,Sort._insertionSort,2,2,6292
+after,FleeceGeometry.kind,1,1,6292
+after,Encoder._growSlots,1,4,6292
+after,stub WriteBarrier,1,3,6292
+after,new _Frame,1,1,6292
+after,_xzm_xzone_malloc_tiny,1,1,6292
+after,mach_absolute_time,1,1,6292
+after,TypedList.lengthInBytes,1,1,6292
+after,ListBase.fillRange,1,1,6292
+after,new _MapFields,1,1,6292
+after,measure,0,6292,6292
+after,main.<anonymous closure>,0,6292,6292
+after,encode,0,6292,6292
+after,stub StackOverflowSharedWithoutFPURegs,0,177,6292
+after,stub CallToRuntime,0,281,6292
+after,_pthread_cond_wait,0,34,6292
+after,stub AllocateObjectSlow,0,21,6292
+after,pthread_cond_signal,0,11,6292
+after,_pthread_mutex_firstfit_lock_slow,0,28,6292
+after,_pthread_mutex_firstfit_lock_wait,0,28,6292
+after,_pthread_mutex_firstfit_unlock_slow,0,10,6292
+after,_pthread_mutex_firstfit_wake,0,10,6292
+after,Output._grow,0,276,6292
+after,[<unknown binary>],0,105,6292
+after,stub WriteBarrierWrappers,0,3,6292
+after,new ByteData.sublistView,0,70,6292
+after,ByteBuffer.asByteData,0,1,6292
+after,clock_gettime_nsec_np,0,4,6292
+after,pthread_cond_broadcast,0,4,6292
+after,_xzm_free_main,0,1,6292
+after,vm_map,0,13,6292
+after,_kernelrpc_vm_map,0,13,6292
+after,mach_msg2_internal,0,13,6292
+after,ListBase.sort,0,2,6292
+after,Sort.sort,0,2,6292
+after,Sort._doSort,0,2,6292

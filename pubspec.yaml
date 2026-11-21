@@ -1,0 +1,16 @@
+name: fleece
+description: A pure Dart codec for Fleece documents and the SurrealDB extensions used by the-base.
+version: 0.1.0
+repository: https://github.com/bysensa/fleece.dart
+
+environment:
+  sdk: '>=3.4.0 <4.0.0'
+
+dependencies:
+  geobase: ^1.5.0
+
+dev_dependencies:
+  test: ^1.25.0
+
+executables:
+  fleece:
