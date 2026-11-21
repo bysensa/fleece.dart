@@ -1,0 +1,3 @@
+operation,implementation,run_1_us,run_2_us,run_3_us,run_4_us,run_5_us,run_6_us,run_7_us,run_8_us,run_9_us,run_10_us,run_11_us,run_12_us,run_13_us,run_14_us,run_15_us,run_16_us,run_17_us,run_18_us,run_19_us,run_20_us,run_21_us
+fleece: close wide root,before,1.476,2.124,2.189,1.491,2.196,1.476,1.479,1.846,1.854,2.181,1.495,1.498,2.214,1.48,2.584,2.498,1.87,1.852,1.49,1.848,1.483
+fleece: close wide root,after,2.053,1.782,1.892,2.283,1.642,1.47,1.852,1.495,1.822,1.495,2.666,1.843,1.802,1.827,1.477,1.515,2.546,2.163,2.254,1.733,2.212

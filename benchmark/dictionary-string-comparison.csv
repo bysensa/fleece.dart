@@ -1,0 +1,106 @@
+operation,implementation,run_1_us,run_2_us,run_3_us,run_4_us,run_5_us
+fleece: encode a value,Dart,466.907,465.23,459.371,475.531,477.282
+fleece: encode a value,Rust,362.62,367.13,365.11,362.61,363.42
+fleece: encode a value,Dart before,528.662,533.394,517.921,518.692,523.566
+fleece: encode one record,Dart,1.078,1.073,1.058,1.06,1.067
+fleece: encode one record,Rust,0.55,0.55,0.56,0.54,0.56
+fleece: encode one record,Dart before,1.339,1.28,1.289,1.315,1.276
+json: write one record,Dart,2.074,2.071,2.081,2.078,2.086
+json: write one record,Rust,0.76,0.74,0.75,0.73,0.75
+json: write one record,Dart before,2.091,2.062,2.094,2.064,2.112
+fleece: check a document,Dart,1907.591,1910.05,1905.91,1913.847,1913.001
+fleece: check a document,Rust,374.82,358.43,358.66,351.65,349.6
+fleece: check a document,Dart before,1938.069,1913.635,1937.358,1912.079,1919.222
+fleece: check and decode to a value,Dart,1633.365,1632.918,1626.897,1630.643,1689.444
+fleece: check and decode to a value,Rust,1275.74,1242.98,1258.51,1220.93,1221.0
+fleece: check and decode to a value,Dart before,1729.046,1655.396,1659.866,1630.925,1679.767
+fleece: decode a checked document,Dart,1598.817,1613.984,1606.805,1597.942,1671.431
+fleece: decode a checked document,Rust,883.45,885.92,896.8,863.96,866.99
+fleece: decode a checked document,Dart before,1688.018,1616.39,1616.202,1596.614,1639.994
+"fleece: read one field in place, unchecked",Dart,0.581,0.58,0.576,0.588,0.581
+"fleece: read one field in place, unchecked",Rust,0.09,0.09,0.09,0.09,0.09
+"fleece: read one field in place, unchecked",Dart before,0.579,0.574,0.587,0.589,0.577
+"fleece: check, then read one field",Dart,1924.144,1929.109,1931.302,1937.474,1915.156
+"fleece: check, then read one field",Rust,358.52,356.81,356.4,350.75,347.47
+"fleece: check, then read one field",Dart before,1933.699,1924.583,1941.926,1942.086,1924.755
+json: write text,Dart,2177.542,2175.567,2185.23,2197.244,2183.539
+json: write text,Rust,585.84,677.23,580.36,564.6,578.58
+json: write text,Dart before,2185.026,2163.441,2179.389,2206.891,2183.454
+json: parse text,Dart,1252.11,1247.44,1238.355,1241.095,1221.706
+json: parse text,Rust,1089.92,1161.63,1094.87,1111.91,1104.61
+json: parse text,Dart before,1236.581,1247.703,1241.496,1218.756,1232.453
+"json: parse, then read one field",Dart,1143.305,1138.745,1132.132,1139.101,1122.861
+"json: parse, then read one field",Rust,1090.02,1186.78,1093.23,1114.34,1102.57
+"json: parse, then read one field",Dart before,1130.706,1128.987,1131.51,1118.459,1127.896
+fleece: delta to append,Dart,4955.264,4950.323,5056.688,4945.183,4943.186
+fleece: delta to append,Rust,1474.37,1566.44,1454.33,1483.21,1465.61
+fleece: delta to append,Dart before,5037.149,4913.011,4954.019,4947.356,4944.087
+fleece: delta as a value,Dart,1802.461,1774.744,1804.862,1822.943,1805.129
+fleece: delta as a value,Rust,338.88,357.9,335.11,333.48,332.83
+fleece: delta as a value,Dart before,1865.534,1786.855,1809.622,1819.131,1797.17
+fleece: compact base and delta,Dart,5883.357,5847.009,5832.396,5919.154,5887.527
+fleece: compact base and delta,Rust,1038.37,1033.96,1034.55,1024.58,1014.54
+fleece: compact base and delta,Dart before,6018.275,5954.719,5969.771,5981.031,5986.246
+fleece: update one field without a decode,Dart,3898.852,3956.313,3920.463,3909.433,3922.078
+fleece: update one field without a decode,Rust,673.3,687.37,670.64,668.07,663.72
+fleece: update one field without a decode,Dart before,4021.868,4061.286,4069.3,4047.198,4073.503
+"fleece: decode, change, encode",Dart,2088.111,2107.831,2105.106,2110.517,2111.012
+"fleece: decode, change, encode",Rust,1232.89,1226.07,1232.83,1231.14,1239.72
+"fleece: decode, change, encode",Dart before,2212.487,2197.808,2207.333,2183.089,2207.299
+fleece: update one field of one record,Dart,4.25,4.288,4.292,4.294,4.311
+fleece: update one field of one record,Rust,0.88,0.88,0.87,0.89,0.89
+fleece: update one field of one record,Dart before,4.351,4.405,4.432,4.403,4.424
+fleece: key of an index entry (a string),Dart,0.138,0.139,0.138,0.14,0.137
+fleece: key of an index entry (a string),Rust,0.07,0.08,0.07,0.08,0.08
+fleece: key of an index entry (a string),Dart before,0.136,0.137,0.136,0.136,0.14
+fleece: key of an index entry (a float),Dart,1.268,1.303,1.298,1.299,1.308
+fleece: key of an index entry (a float),Rust,0.41,0.41,0.4,0.4,0.41
+fleece: key of an index entry (a float),Dart before,1.309,1.309,1.317,1.311,1.321
+"vector f32, 3124 bytes: dot in place",Dart,0.973,0.961,0.963,0.978,0.964
+"vector f32, 3124 bytes: dot in place",Rust,0.12,0.12,0.12,0.12,0.12
+"vector f32, 3124 bytes: dot in place",Dart before,0.959,0.974,0.963,0.961,0.962
+"vector f16, 1588 bytes: dot in place",Dart,2.198,2.194,2.148,2.141,2.332
+"vector f16, 1588 bytes: dot in place",Rust,0.42,0.42,0.42,0.42,0.43
+"vector f16, 1588 bytes: dot in place",Dart before,2.239,2.255,2.201,2.27,2.263
+"vector i8, 820 bytes: dot in place",Dart,3.126,3.112,3.152,3.164,3.078
+"vector i8, 820 bytes: dot in place",Rust,0.12,0.12,0.12,0.12,0.12
+"vector i8, 820 bytes: dot in place",Dart before,3.052,3.129,3.156,3.138,3.189
+"vector bits, 148 bytes: dot in place",Dart,1.106,1.105,1.104,1.118,1.115
+"vector bits, 148 bytes: dot in place",Rust,0.15,0.15,0.15,0.15,0.15
+"vector bits, 148 bytes: dot in place",Dart before,1.107,1.112,1.115,1.1,1.111
+vector f32: cosine in place,Dart,1.375,1.374,1.366,1.367,1.382
+vector f32: cosine in place,Rust,0.12,0.12,0.12,0.12,0.12
+vector f32: cosine in place,Dart before,1.361,1.342,1.365,1.356,1.369
+"vector f32: decode the document, then dot",Dart,3.516,3.53,3.572,3.526,3.549
+"vector f32: decode the document, then dot",Rust,0.55,0.56,0.56,0.56,0.55
+"vector f32: decode the document, then dot",Dart before,3.516,3.521,3.536,3.56,3.523
+"plain slices: dot of 768 f32, one sum",Dart,3.012,3.016,3.02,3.041,3.003
+"plain slices: dot of 768 f32, one sum",Rust,0.29,0.3,0.29,0.29,0.29
+"plain slices: dot of 768 f32, one sum",Dart before,3.011,3.002,3.0,3.076,2.998
+polygon of 10 000 points: read,Dart,4.279,4.239,4.224,4.246,4.208
+polygon of 10 000 points: read,Rust,2.55,2.59,2.6,2.58,2.59
+polygon of 10 000 points: read,Dart before,4.256,4.225,4.257,4.255,4.208
+"polygon: read, given to geo",Dart,5.393,5.382,5.402,5.421,5.386
+"polygon: read, given to geo",Rust,2.61,2.6,2.61,2.6,2.6
+"polygon: read, given to geo",Dart before,5.453,5.387,5.378,5.753,5.407
+"polygon: read, copied to geo",Dart,108.531,108.025,108.781,108.457,108.088
+"polygon: read, copied to geo",Rust,5.18,5.02,5.19,5.21,5.18
+"polygon: read, copied to geo",Dart before,109.625,106.951,108.671,107.764,108.069
+fleece: delta at the bottom of 25 levels,Dart,172.067,173.627,171.221,173.178,173.408
+fleece: delta at the bottom of 25 levels,Rust,84.68,84.36,84.06,87.89,84.2
+fleece: delta at the bottom of 25 levels,Dart before,173.18,172.386,172.527,172.383,172.538
+fleece: delta at the bottom of 50 levels,Dart,340.618,342.382,340.277,342.343,343.132
+fleece: delta at the bottom of 50 levels,Rust,167.73,170.77,167.79,176.27,167.04
+fleece: delta at the bottom of 50 levels,Dart before,342.587,340.822,339.477,340.157,340.473
+fleece: delta at the bottom of 100 levels,Dart,678.392,687.145,677.405,682.905,681.509
+fleece: delta at the bottom of 100 levels,Rust,334.73,334.21,334.1,347.85,334.57
+fleece: delta at the bottom of 100 levels,Dart before,683.622,679.816,682.594,678.404,678.697
+fleece: close wide root,Dart,1.804,2.196,2.221,1.738,1.747
+fleece: close wide root,Rust,1.161,1.148,1.15,1.155,1.161
+fleece: close wide root,Dart before,1.542,2.058,1.822,1.838,1.494
+fleece: encode address dictionaries,Dart,110.064,110.631,109.894,111.709,110.685
+fleece: encode address dictionaries,Rust,107.22,108.34,109.2,108.68,108.74
+fleece: encode address dictionaries,Dart before,139.475,137.586,138.084,137.979,136.864
+fleece: encode short string values,Dart,112.145,111.206,113.146,112.022,112.077
+fleece: encode short string values,Rust,101.21,100.02,100.27,99.47,101.06
+fleece: encode short string values,Dart before,141.54,140.041,141.694,145.552,140.097

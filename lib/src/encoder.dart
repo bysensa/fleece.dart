@@ -52,8 +52,14 @@ final class _Output {
   int text(String s, [ExtKind? ext]) {
     final size = s.length;
     if (size <= 64 && (size == 0 || s.codeUnitAt(0) < 128)) {
-      final start = length, at = blob(0x40, size, ext);
+      // Even the extended length of an ASCII string this size fits in one byte.
+      final header = size < 15 ? 1 : 2, prefix = ext == null ? 0 : 2;
+      final start = reserve(prefix + _even(header + size));
       final out = bytes;
+      if (ext != null) data.setUint16(start, 0x3100 + ext.index);
+      out[start + prefix] = size < 15 ? 0x40 + size : 0x4f;
+      if (size >= 15) out[start + prefix + 1] = size;
+      final at = start + prefix + header;
       var i = 0;
       for (; i < size; i++) {
         final c = s.codeUnitAt(i);
@@ -72,6 +78,56 @@ final class _Output {
   }
 }
 
+final class _ShortString {
+  const _ShortString(this.text, this.hash, this.slot);
+  final String text;
+  final int hash;
+  final int slot;
+}
+
+final class _ShortStrings {
+  List<_ShortString?> _entries = List.filled(16, null);
+  int _count = 0;
+
+  // Hits are negative Fleece pointers. A miss gives the bucket to insert
+  // into after the caller has written and validated the UTF-8 body.
+  @pragma('vm:prefer-inline')
+  int find(String key, int hash) {
+    final entries = _entries, mask = entries.length - 1;
+    var i = hash & mask;
+    while (true) {
+      final entry = entries[i];
+      if (entry == null) return i;
+      if (identical(entry.text, key) ||
+          entry.hash == hash && entry.text == key) {
+        return entry.slot;
+      }
+      i = (i + 1) & mask;
+    }
+  }
+
+  void insert(int index, String key, int hash, int slot) {
+    _entries[index] = _ShortString(key, hash, slot);
+    if (++_count * 3 >= _entries.length * 2) _grow();
+  }
+
+  void _grow() {
+    final entries = _entries;
+    // Grow small tables quickly, then limit the spare space on large documents.
+    final size = entries.length * (entries.length < 1024 ? 4 : 2);
+    final next = List<_ShortString?>.filled(size, null), mask = size - 1;
+    for (final entry in entries) {
+      if (entry == null) continue;
+      var i = entry.hash & mask;
+      while (next[i] != null) {
+        i = (i + 1) & mask;
+      }
+      next[i] = entry;
+    }
+    _entries = next;
+  }
+}
+
 final class _Frame {
   _Frame(this.outer, this.depth);
   final _Frame? outer;
@@ -86,45 +142,45 @@ final class _Frame {
   _MapFields? fields;
 }
 
-// A recurring map shape needs sorting only when its insertion-order keys
-// change. Values always come from the current map, including identity maps.
+final class _MapField {
+  String name = '';
+  Object? value;
+  // A string's inline word is nonzero. Out-of-line slots are negative.
+  int keySlot = 0;
+}
+
+// Both orders refer to the same fields. Values come from the current map's
+// entries, including identity maps with distinct String instances.
 final class _MapFields {
   _MapFields(int count)
-      : names = List<String>.filled(count, ''),
-        values = List<Object?>.filled(count, null),
-        order = List<int>.generate(count, (i) => i, growable: false),
-        keySlots = List<int?>.filled(count, null);
-  final List<String> names;
-  final List<Object?> values;
-  final List<int> order;
-  final List<int?> keySlots;
+      : fields = List.generate(count, (_) => _MapField(), growable: false);
+  final List<_MapField> fields;
+  late final sorted = fields.toList(growable: false);
   int _index = 0;
   bool _changed = true;
-  late final _visit = _field;
-
-  void _field(dynamic key, dynamic value) {
-    final i = _index++;
-    final old = names[i];
+  late final void Function(dynamic, dynamic) _visit = (key, value) {
+    final field = fields[_index++];
+    final old = field.name;
     if (!identical(old, key) && old != key) {
-      names[i] = key as String;
+      field.name = key as String;
+      field.keySlot = 0;
       _changed = true;
     }
-    values[i] = value;
-  }
+    field.value = value;
+  };
 
   void load(Map map) {
     _index = 0;
     map.forEach(_visit);
     if (!_changed) return;
-    order.sort((a, b) => _compareNames(names[a], names[b]));
-    for (var i = 1; i < order.length; i++) {
-      final key = names[order[i]];
-      if (names[order[i - 1]] == key) {
+    sorted.sort((a, b) => _compareNames(a.name, b.name));
+    for (var i = 1; i < sorted.length; i++) {
+      final key = sorted[i].name;
+      if (sorted[i - 1].name == key) {
         throw _EncoderState(EncodeErrorCode.duplicateKey,
             'Duplicate dictionary key ' + key, key);
       }
     }
-    keySlots.fillRange(0, keySlots.length, null);
     _changed = false;
   }
 }
@@ -168,7 +224,7 @@ final class Encoder {
   // slice with one slot in the parent, retaining the capacity for siblings.
   SlotBuffer _slots = allocateSlots(0);
   int _slotCount = 0;
-  final _strings = HashMap<String, int>();
+  late final _strings = _ShortStrings();
   int? _root;
   ExtKind? _pending;
   bool _finished = false;
@@ -426,23 +482,28 @@ final class Encoder {
     endArray();
   }
 
-  int _stringSlot(String value, {int? inBase}) {
-    final baseTarget = inBase != null && inBase < _baseLength ? inBase : null;
+  int _keyStringSlot(String value, int? inBase) {
+    if (inBase != null &&
+        inBase < _baseLength &&
+        value.isNotEmpty &&
+        (value.length != 1 || value.codeUnitAt(0) >= 128)) {
+      _validateUtf16(value);
+      return _pointer(inBase);
+    }
+    return _stringSlot(value);
+  }
+
+  int _stringSlot(String value) {
     final length = value.length;
     if (length == 0) return 0x4000;
     if (length == 1 && value.codeUnitAt(0) < 128)
       return 0x4100 + value.codeUnitAt(0);
-    if (length <= 15) {
-      final cached = _strings[value];
-      if (cached != null) return _pointer(baseTarget ?? cached);
-    }
-    if (baseTarget != null) {
-      _validateUtf16(value);
-      return _pointer(baseTarget);
-    }
-    final position = _position;
-    if (_out.text(value) <= 15) _strings[value] = position;
-    return _pointer(position);
+    final hash = length <= 15 ? value.hashCode : 0;
+    final index = length <= 15 ? _strings.find(value, hash) : 0;
+    if (index < 0) return index;
+    final slot = _pointer(_position);
+    if (_out.text(value) <= 15) _strings.insert(index, value, hash, slot);
+    return slot;
   }
 
   void writeString(String value) {
@@ -490,7 +551,7 @@ final class Encoder {
       (frame.keys ??= []).add(number);
       _addSlot(number);
     } else {
-      final slot = _stringSlot(key, inBase: inBase);
+      final slot = _keyStringSlot(key, inBase);
       (frame.keys ??= []).add(key);
       _addSlot(slot);
     }
@@ -667,6 +728,26 @@ final class Encoder {
         writeNull();
       case bool b:
         writeBool(b);
+      case String s:
+        writeString(s);
+      case FleeceNone():
+        writeNone();
+      case FleeceValue v:
+        if (_pending != null)
+          throw _EncoderState(
+              EncodeErrorCode.extPayload, 'A payload is pending');
+        _checkValue();
+        _pending = v.kind;
+        v._writePayload(this);
+      case Map fields:
+        _map(fields);
+      default:
+        _writeNumberOrList(value);
+    }
+  }
+
+  void _writeNumberOrList(Object? value) {
+    switch (value) {
       case int n when _wireInt(n):
         writeInt(n);
       case BigInt n:
@@ -681,68 +762,100 @@ final class Encoder {
         } else {
           writeF64(f.value);
         }
-      case String s:
-        writeString(s);
-      case FleeceNone():
-        writeNone();
-      case FleeceValue v:
-        if (_pending != null)
-          throw _EncoderState(
-              EncodeErrorCode.extPayload, 'A payload is pending');
-        _checkValue();
-        _pending = v.kind;
-        v._writePayload(this);
       case Uint8List b:
         writeData(b);
       case List items:
-        beginArray();
-        final frame = _frame!;
-        for (final item in items) {
-          _child(item, frame);
-        }
-        endArray();
-      case Map fields:
-        _map(fields);
+        _array(items);
       default:
         throw ArgumentError.value(value, 'value', 'Unsupported Fleece value');
     }
   }
 
-  // The enclosing owned collection has already established its writer state.
-  // These common children go straight into its slot slice.
-  void _child(Object? value, _Frame frame) {
-    final int slot;
-    if (value is String) {
-      slot = _stringSlot(value);
-    } else if (value is int &&
-        value >= -2048 &&
-        value < 2048 &&
-        _wireInt(value)) {
-      slot = value & 0xfff;
-    } else if (value is bool) {
-      slot = value ? 0x3800 : 0x3400;
-    } else if (value == null) {
-      slot = 0x3000;
+  void _array(List items) {
+    beginArray();
+    final end = _slotCount + items.length;
+    if (end > _slots.length) _growSlots(end);
+    if (items is List<String>) {
+      for (final item in items) {
+        final slot = _stringSlot(item);
+        _slots[_slotCount++] = slot;
+      }
+    } else if (items is List<Map>) {
+      for (final fields in items) {
+        _map(fields);
+      }
     } else {
-      writeValue(value);
-      return;
+      for (final item in items) {
+        final slot = _childSlot(item);
+        if (slot == null) {
+          _complexChild(item);
+        } else {
+          _slots[_slotCount++] = slot;
+        }
+      }
     }
-    _addSlot(slot);
-    frame.expectsKey = frame.dict;
+    endArray();
+  }
+
+  // A null result delegates the value to its full writer.
+  @pragma('vm:prefer-inline')
+  int? _childSlot(Object? value) {
+    if (value is String) return _stringSlot(value);
+    if (value is int && value >= -2048 && value < 2048 && _wireInt(value))
+      return value & 0xfff;
+    if (value is bool) return value ? 0x3800 : 0x3400;
+    if (value == null) return 0x3000;
+    if (value is FleeceNone) return 0x3100;
+    return null;
+  }
+
+  @pragma('vm:prefer-inline')
+  void _child(Object? value, _Frame frame) {
+    final slot = _childSlot(value);
+    if (slot != null) {
+      _addSlot(slot);
+      frame.expectsKey = frame.dict;
+    } else {
+      _complexChild(value);
+    }
+  }
+
+  @pragma('vm:prefer-inline')
+  void _complexChild(Object? value) {
+    if (value is FleeceValue) {
+      // The enclosing array or dictionary has already opened a value slot.
+      _pending = value.kind;
+      value._writePayload(this);
+    } else if (value is Map) {
+      _map(value);
+    } else {
+      _writeNumberOrList(value);
+    }
+  }
+
+  void _singleField(dynamic key, dynamic value) {
+    writeKey(key as String);
+    writeValue(value);
+  }
+
+  int _mapKeySlot(_MapField field) {
+    final key = field.name;
+    final slot = _stringSlot(key);
+    if (slot >= 0 || key.length <= 15 && _strings.find(key, key.hashCode) < 0) {
+      field.keySlot = slot;
+    }
+    return slot;
   }
 
   void _map(Map fields) {
     beginDict();
-    if (fields.length <= 1) {
-      fields.forEach((key, value) {
-        writeKey(key as String);
-        writeValue(value);
-      });
+    final size = fields.length;
+    if (size <= 1) {
+      fields.forEach(_singleField);
       endDict();
       return;
     }
     final frame = _frame!;
-    final size = fields.length;
     // Keep a bounded layout at each nesting level. A large or changing map
     // still visits every value in canonical key order.
     if (size > 32) {
@@ -762,30 +875,40 @@ final class Encoder {
       }
     } else {
       var layout = frame.fields;
-      if (layout == null || layout.names.length != size) {
+      if (layout == null || layout.fields.length != size) {
         frame.fields = layout = _MapFields(size);
       }
       layout.load(fields);
-      for (var i = 0; i < size; i++) {
-        final index = layout.order[i];
-        if (sharedKeys == null) {
-          var slot = layout.keySlots[index];
-          if (slot == null) {
-            final key = layout.names[index];
-            slot = _stringSlot(key);
-            // Longer UTF-8 names must be emitted at each occurrence.
-            if (slot >= 0 || key.length <= 15 && _strings.containsKey(key)) {
-              layout.keySlots[index] = slot;
-            }
-          }
-          _addSlot(slot);
+      if (sharedKeys == null) {
+        final end = _slotCount + 2 * size;
+        if (end > _slots.length) _growSlots(end);
+        for (final field in layout.sorted) {
+          final cached = field.keySlot;
+          final key = cached == 0 ? _mapKeySlot(field) : cached;
+          final at = _slotCount;
+          _slots[at] = key;
+          // Commit the key before encoding the value. A streaming caller can
+          // supply a replacement if the value is rejected.
+          _slotCount = at + 1;
           frame.expectsKey = false;
-        } else {
-          writeKey(layout.names[index]);
+          final value = field.value;
+          field.value = null;
+          final slot = _childSlot(value);
+          if (slot == null) {
+            _complexChild(value);
+          } else {
+            _slots[at + 1] = slot;
+            _slotCount = at + 2;
+            frame.expectsKey = true;
+          }
         }
-        final value = layout.values[index];
-        layout.values[index] = null;
-        _child(value, frame);
+      } else {
+        for (final field in layout.sorted) {
+          writeKey(field.name);
+          final value = field.value;
+          field.value = null;
+          _child(value, frame);
+        }
       }
     }
     endDict();

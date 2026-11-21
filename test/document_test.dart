@@ -150,6 +150,32 @@ void main() {
     }
     expect(encode(fields), (writer..endDict()).finish());
   });
+  test('short strings keep their first body through collisions and growth', () {
+    // These names have the same low hash bits on the current backend.
+    final buckets = List.generate(64, (_) => <String>[]);
+    for (var i = 0; i < 48 * buckets.length; i++) {
+      final key = 'key$i';
+      buckets[key.hashCode & 63].add(key);
+    }
+    final names = buckets.firstWhere((b) => b.length >= 48).take(48).toList();
+    const short = '🙂🙂🙂éx', long = '🙂🙂🙂éxy'; // 15 and 16 UTF-8 bytes
+    final rows = [
+      ...names,
+      short,
+      long,
+      for (final name in names.reversed) String.fromCharCodes(name.codeUnits),
+      short,
+      long,
+    ];
+    final array = Doc(encode(rows)).root.asArray!;
+    expect(array.map((v) => v.asString), rows);
+    for (var i = 0; i < names.length; i++) {
+      expect(array[i].position, array[rows.length - 3 - i].position);
+    }
+    expect(array[names.length].position, array[rows.length - 2].position);
+    expect(array[names.length + 1].position,
+        isNot(array[rows.length - 1].position));
+  });
   test('inherited dictionaries keep the parent ahead of reordered shared keys',
       () {
     final keys = SharedKeys()
@@ -269,6 +295,37 @@ void main() {
         expect(finish(actual), finish(start()));
       }
     }
+  });
+  test('writing can continue at a rejected dictionary or string-array value',
+      () {
+    const invalid = '\ud800';
+    final dict = Encoder();
+    expect(() => dict.writeValue({'b': invalid, 'a': 'first'}),
+        throwsArgumentError);
+    expect(
+        (dict
+              ..writeString('last')
+              ..endDict())
+            .finish(),
+        encode({'a': 'first', 'b': 'last'}));
+
+    final nested = Encoder();
+    expect(
+        () => nested.writeValue({
+              'a': 1,
+              'b': <String>['before', invalid]
+            }),
+        throwsArgumentError);
+    expect(
+        (nested
+              ..writeString('after')
+              ..endArray()
+              ..endDict())
+            .finish(),
+        encode({
+          'a': 1,
+          'b': ['before', 'after']
+        }));
   });
   test('shared keys shrink documents and are needed to read them', () {
     final v = {'first_name': 'Tintin', 'last-name': '', 'not eligible': 1},

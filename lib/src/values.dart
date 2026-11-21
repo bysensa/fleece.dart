@@ -485,6 +485,8 @@ final class FleeceSet extends FleeceValue {
   ExtKind get kind => ExtKind.set;
   @override
   Object get _payload => members;
+  @override
+  void _writePayload(Encoder e) => e._array(members);
 }
 
 typedef FleecePoint = (double, double);

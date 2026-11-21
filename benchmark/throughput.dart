@@ -48,6 +48,24 @@ Map<String, Object?> _record(int i) => {
       },
     };
 
+// Preserve the order in which encode(records) encounters these string values.
+(List<Map<String, Object?>>, List<String>) _dictionaryInputs(
+    List<Map<String, Object?>> rows) {
+  final addresses = <Map<String, Object?>>[], strings = <String>[];
+  for (final row in rows) {
+    final address = row['address'] as Map<String, Object?>;
+    addresses.add(address);
+    strings.addAll([
+      address['city'] as String,
+      address['zip'] as String,
+      (row['id'] as FleeceRecordId).table,
+      row['name'] as String,
+      ...row['tags'] as List<String>,
+    ]);
+  }
+  return (addresses, strings);
+}
+
 // Time endArray on the same 1,000 records as encode(). The open encoders
 // already contain every record. finish() and the allocation of each batch
 // are outside the timed section, as in the Rust counterpart.
@@ -198,17 +216,27 @@ void _geometry() {
 void main(List<String> args) {
   final profile = args.length == 2 && args.first == '--profile-encode';
   final wideRoot = args.length == 1 && args.first == '--wide-root';
+  final dictionaries = args.length == 1 && args.first == '--dict-strings';
   final seconds = profile ? int.tryParse(args[1]) ?? 0 : 0;
   if (args.isNotEmpty &&
       !wideRoot &&
+      !dictionaries &&
       !(args.length == 2 && args.first == '--write-inputs') &&
       !(profile && seconds > 0)) {
     stderr.writeln(
-        'Usage: throughput [--write-inputs DIRECTORY | --profile-encode SECONDS | --wide-root]');
+        'Usage: throughput [--write-inputs DIRECTORY | --profile-encode SECONDS | --wide-root | --dict-strings]');
     exitCode = 64;
     return;
   }
   final records = List.generate(1000, _record);
+  if (dictionaries) {
+    final (addresses, strings) = _dictionaryInputs(records);
+    _measure('fleece: encode address dictionaries', () => encode(addresses),
+        bytes: encode(addresses).length);
+    _measure('fleece: encode short string values', () => encode(strings),
+        bytes: encode(strings).length);
+    return;
+  }
   if (wideRoot) {
     _wideRoot(records);
     return;
@@ -247,6 +275,11 @@ void main(List<String> args) {
     File.fromUri(dir.uri.resolve('record-shared.fleece'))
         .writeAsBytesSync(oneShared);
     File.fromUri(dir.uri.resolve('change.fleece')).writeAsBytesSync(delta);
+    final (addresses, strings) = _dictionaryInputs(records);
+    File.fromUri(dir.uri.resolve('addresses.fleece'))
+        .writeAsBytesSync(encode(addresses));
+    File.fromUri(dir.uri.resolve('short-strings.fleece'))
+        .writeAsBytesSync(encode(strings));
     _vectors(inputs: dir);
     return;
   }

@@ -16,6 +16,14 @@ fn dart_inputs_match() {
     let mut records = Value::Array((0..1000).map(record).collect());
     let bytes = encode(&records).unwrap();
     check("records.fleece", &bytes);
+    if std::env::var("FLEECE_BENCH_DICT_STRINGS").as_deref() == Ok("1")
+        || dir.join("addresses.fleece").exists()
+        || dir.join("short-strings.fleece").exists()
+    {
+        let (addresses, strings) = dictionary_inputs(&records);
+        check("addresses.fleece", &encode(&addresses).unwrap());
+        check("short-strings.fleece", &encode(&strings).unwrap());
+    }
     check(
         "records.json",
         fleece::json::to_json(&records).to_string().as_bytes(),
@@ -82,6 +90,42 @@ fn dart_inputs_match() {
     );
     let bits: Vec<u8> = scores.into_iter().flat_map(f32::to_le_bytes).collect();
     check("vector-results.f32", &bits);
+}
+
+fn dictionary_inputs(records: &Value) -> (Value, Value) {
+    let Value::Array(rows) = records else { unreachable!() };
+    let mut addresses = Vec::new();
+    let mut strings = Vec::new();
+    for row in rows {
+        let Value::Object(row) = row else { unreachable!() };
+        let Value::Object(address) = &row["address"] else { unreachable!() };
+        let Value::RecordId(id) = &row["id"] else { unreachable!() };
+        let Value::Array(tags) = &row["tags"] else { unreachable!() };
+        addresses.push(row["address"].clone());
+        strings.extend([
+            address["city"].clone(),
+            address["zip"].clone(),
+            Value::from(id.table.clone()),
+            row["name"].clone(),
+        ]);
+        strings.extend_from_slice(tags);
+    }
+    (Value::Array(addresses), Value::Array(strings))
+}
+
+#[test]
+fn encode_dict_strings() {
+    let records = Value::Array((0..1000).map(record).collect());
+    let (addresses, strings) = dictionary_inputs(&records);
+    println!();
+    for (name, value) in [
+        ("fleece: encode address dictionaries", addresses),
+        ("fleece: encode short string values", strings),
+    ] {
+        measure(name, encode(&value).unwrap().len(), || {
+            encode(black_box(&value)).unwrap()
+        });
+    }
 }
 
 #[test]

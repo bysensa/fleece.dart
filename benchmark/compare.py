@@ -40,7 +40,7 @@ def build_rust(crate, work):
     return bench, libraries
 
 
-def verify_inputs(crate, work, dart_benches, libraries):
+def verify_inputs(crate, work, dart_benches, libraries, dict_strings=False):
     # Compile the fixture check in the same module as upstream's private record().
     source = work / "check.rs"
     source.write_text((crate / "benches/throughput.rs").read_text() + "\n" +
@@ -55,7 +55,8 @@ def verify_inputs(crate, work, dart_benches, libraries):
         inputs = work / f"inputs-{index}"
         subprocess.run([bench, "--write-inputs", inputs], check=True)
         subprocess.run([check, "--exact", "dart_inputs_match"], check=True,
-                       env={**os.environ, "FLEECE_BENCH_INPUTS": str(inputs)})
+                       env={**os.environ, "FLEECE_BENCH_INPUTS": str(inputs),
+                            "FLEECE_BENCH_DICT_STRINGS": str(int(dict_strings))})
         if index == 0:
             for path in sorted(inputs.iterdir()):
                 print(f"{path.name}: {path.stat().st_size:,} bytes", flush=True)
@@ -89,6 +90,8 @@ def main():
                         help="include a previously compiled Dart throughput executable")
     parser.add_argument("--wide-root", action="store_true",
                         help="also time closing the prepared 1,000-record array in both languages")
+    parser.add_argument("--dict-strings", action="store_true",
+                        help="also check and time address dictionaries and short string values")
     args = parser.parse_args()
     if args.runs < 1:
         parser.error("--runs must be positive")
@@ -108,7 +111,7 @@ def main():
             baseline = args.baseline_dart.resolve()
             executables["Dart before"] = baseline
             dart_benches.append(baseline)
-        checker = verify_inputs(crate, work, dart_benches, libraries)
+        checker = verify_inputs(crate, work, dart_benches, libraries, args.dict_strings)
 
         def measure_build(name):
             exe = executables[name]
@@ -117,6 +120,10 @@ def main():
                 root = (measure(checker, ["--exact", "close_wide_root", "--nocapture"])
                         if name == "Rust" else measure(exe, ["--wide-root"]))
                 times.update(root)
+            if args.dict_strings:
+                parts = (measure(checker, ["--exact", "encode_dict_strings", "--nocapture"])
+                         if name == "Rust" else measure(exe, ["--dict-strings"]))
+                times.update(parts)
             return times
 
         print("Warming up the executables...", flush=True)
