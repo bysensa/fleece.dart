@@ -533,6 +533,11 @@ final class DictRef extends IterableBase<MapEntry<String, ValueRef>> {
     }
   }
 
+  Iterable<MapEntry<String, ValueRef>> _orderedEntries(bool canonical) =>
+      canonical && _doc.sharedKeys != null && !_inherits
+          ? (entries.toList()..sort((a, b) => _compareNames(a.key, b.key)))
+          : entries;
+
   Iterable<(String, int, int)> _visibleSlots(Map<int, String> names) sync* {
     // Resolve shadows before reading values. Keep the wire byte length with
     // the winning slot so key accounting never needs to re-encode UTF-8.

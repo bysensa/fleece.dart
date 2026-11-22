@@ -2,6 +2,7 @@ import 'dart:convert' show jsonEncode;
 
 import 'package:analyzer/dart/analysis/utilities.dart' show parseString;
 import 'package:analyzer/dart/ast/ast.dart';
+import 'package:analyzer/dart/constant/value.dart';
 import 'package:analyzer/dart/element/element.dart';
 import 'package:analyzer/dart/element/nullability_suffix.dart';
 import 'package:analyzer/dart/element/type.dart';
@@ -19,6 +20,14 @@ const _model = TypeChecker.typeNamedLiterally(
   inPackage: 'fleece',
 );
 const _key = TypeChecker.typeNamedLiterally('FleeceKey', inPackage: 'fleece');
+const _useCodec = TypeChecker.typeNamedLiterally(
+  'FleeceUseCodec',
+  inPackage: 'fleece',
+);
+const _codecType = TypeChecker.typeNamedLiterally(
+  'FleeceCodec',
+  inPackage: 'fleece',
+);
 const _native = TypeChecker.typeNamedLiterally(
   'FleeceValue',
   inPackage: 'fleece',
@@ -127,14 +136,18 @@ class _Generator extends Generator {
     };
     for (final annotation in library.annotatedWith(_model)) {
       final cls = annotation.element;
-      if (cls is! ClassElement || cls.typeParameters.isNotEmpty) {
-        _reject(cls, '@FleeceModel requires a non-generic class.');
+      if (cls is! ClassElement) {
+        _reject(cls, '@FleeceModel requires a Dart class.');
       }
-      final ctor = cls.unnamedConstructor;
+      final selected = annotation.annotation.peek('constructor')?.stringValue;
+      final ctor = selected == null || selected.isEmpty || selected == 'new'
+          ? cls.unnamedConstructor
+          : cls.getNamedConstructor(selected);
       if (ctor == null || cls.isAbstract && !ctor.isFactory) {
         _reject(
           cls,
-          'Provide an unnamed constructor that can construct ${cls.displayName}.',
+          'Provide a constructor that can construct ${cls.displayName}. '
+          'Select a named constructor with @FleeceModel(constructor: ...).',
         );
       }
       final prefix = _prefix(
@@ -145,6 +158,7 @@ class _Generator extends Generator {
       for (final id in [
         generated,
         '${generated}Operations',
+        '_${cls.displayName}Fields',
         _format(cls.displayName),
         _boundType(cls.displayName),
       ]) {
@@ -169,10 +183,22 @@ class _Generator extends Generator {
 }
 
 class _Field {
-  _Field(this.param, this.key);
+  _Field(this.param, this.key, this.custom);
   final FormalParameterElement param;
   final String key;
+  final _CustomCodec? custom;
   String get name => param.displayName;
+  String get slot => 'field\$$name';
+}
+
+class _CustomCodec {
+  _CustomCodec(this.type, this.valueType);
+  final InterfaceType type;
+  final DartType valueType;
+
+  bool accepts(DartType fieldType, LibraryElement lib) =>
+      valueType == fieldType ||
+      valueType == lib.typeSystem.promoteToNonNull(fieldType);
 }
 
 class _ModelEmitter {
@@ -182,6 +208,48 @@ class _ModelEmitter {
   final String api;
   final _Naming naming;
   final String generated;
+  // Construct compound and custom codecs once per concrete model schema.
+  // Lazy fields also allow self-referential and mutually recursive models.
+  final _codecs = <String, String>{};
+  String cached(String expression) => expression.contains('(')
+      ? _codecs.putIfAbsent(expression, () => '_codec\$${_codecs.length}')
+      : expression;
+  String get _args => _angles(cls.typeParameters.map((p) => p.displayName));
+  String get _decl => _angles(
+    cls.typeParameters.map(
+      (p) => p.bound == null
+          ? p.displayName
+          : '${p.displayName} extends ${typeName(p.bound!, p)}',
+    ),
+  );
+  String get _codecParams => cls.typeParameters
+      .map(
+        (p) =>
+            'required ${api}FleeceCodec<${p.displayName}> codec${p.displayName}, ',
+      )
+      .join();
+  String get _codecArgs => cls.typeParameters
+      .map((p) => 'codec${p.displayName}: codec${p.displayName}, ')
+      .join();
+  List<String> get _codecNames => [
+    for (final p in cls.typeParameters) 'codec${p.displayName}',
+  ];
+
+  Iterable<String> codecParameters(DartType type, _Field field) sync* {
+    if (field.custom?.accepts(type, lib) ?? false) return;
+    if (type is TypeParameterType) {
+      yield 'codec${type.element.displayName}';
+    } else if (type is InterfaceType) {
+      for (final arg in type.typeArguments) {
+        yield* codecParameters(arg, field);
+      }
+    }
+  }
+
+  static String _angles(Iterable<String> args) =>
+      args.isEmpty ? '' : '<${args.join(', ')}>';
+  String _formatCodec(String format) =>
+      _args.isEmpty ? '$format.codec' : '$format.codec$_args($_codecArgs)';
   late final bytesType = sdkType(
     'Uint8List',
     'dart:typed_data',
@@ -208,31 +276,42 @@ class _ModelEmitter {
   // under List or Map. The setter still accepts the original model type.
   ({String type, String read})? binding(
     DartType type,
-    String cursor, [
+    String cursor,
+    _Field field, [
     int depth = 0,
   ]) {
+    if (field.custom?.accepts(type, lib) ?? false) return null;
+    if (type is TypeParameterType) {
+      return (
+        type: typeName(type, field.param),
+        read: '${codec(type, field)}.bindValue($cursor)',
+      );
+    }
     if (type is! InterfaceType) return null;
     final nullable = _nullable(type);
     final suffix = nullable ? '?' : '';
     if (_model.hasAnnotationOfExact(type.element)) {
-      final format =
-          _prefix(lib, type.element) + _format(type.element.displayName);
       final method = nullable ? 'optionalObject' : 'object';
       return (
-        type: boundType(type.element) + suffix,
-        read: '$cursor.$method($format.codec.bind)',
+        type:
+            boundType(type.element) +
+            _angles(type.typeArguments.map((t) => typeName(t, field.param))) +
+            suffix,
+        read: '$cursor.$method(${modelCodec(type, field)}.bind)',
       );
     }
     if (!type.isDartCoreList && !type.isDartCoreMap) return null;
     final item = 'item$depth';
-    final nested = binding(type.typeArguments.last, item, depth + 1);
-    if (nested == null) return null;
-    final prefix = _prefix(lib, type.element);
-    final collection = type.isDartCoreList
-        ? '${prefix}List<${nested.type}>'
-        : '${prefix}Map<${prefix}String, ${nested.type}>';
-    final method = type.isDartCoreList ? 'listItems' : 'mapItems';
-    final read = '$cursor.$method<${nested.type}>(($item) => ${nested.read})';
+    final elementType = type.typeArguments.last;
+    final input = typeName(elementType, field.param);
+    final nested = binding(elementType, item, field, depth + 1);
+    final output = nested?.type ?? input;
+    final args = '<$input, $output>';
+    final collection =
+        api + (type.isDartCoreList ? 'FleeceList' : 'FleeceMap') + args;
+    final method = type.isDartCoreList ? 'list' : 'map';
+    final bind = nested == null ? '' : ', ($item) => ${nested.read}';
+    final read = '$cursor.$method$args(${codec(elementType, field)}$bind)';
     return (
       type: collection + suffix,
       read: nullable ? '$cursor.hasValue ? $read : null' : read,
@@ -268,8 +347,84 @@ class _ModelEmitter {
     }
   }
 
+  String? defaultCode(FormalParameterElement param) {
+    final code = param.defaultValueCode;
+    if (code == null ||
+        param is! SuperFormalParameterElement ||
+        param.constantInitializer != null)
+      return code;
+    // Source text from the superclass can reference private constants and
+    // import prefixes that have completely different meanings in this part.
+    final value = param.computeConstantValue();
+    if (value == null)
+      _reject(param, 'Declare an explicit default for ${param.displayName}.');
+    return inheritedConstant(value, param);
+  }
+
+  String inheritedConstant(DartObject value, FormalParameterElement param) {
+    String emit(DartObject value) => inheritedConstant(value, param);
+    if (value.isNull) return 'null';
+    if (value.toStringValue() case final string?) return _literal(string);
+    if (value.toIntValue() case final number?) return number.toString();
+    if (value.toBoolValue() case final flag?) return flag.toString();
+    if (value.toDoubleValue() case final number?) {
+      if (number.isNaN) return 'double.nan';
+      if (number.isInfinite)
+        return number.isNegative
+            ? 'double.negativeInfinity'
+            : 'double.infinity';
+      return number.toString();
+    }
+    final type = value.type;
+    if (type is InterfaceType) {
+      final args = _angles(type.typeArguments.map((t) => typeName(t, param)));
+      if (value.toListValue() case final items?)
+        return 'const $args[${items.map(emit).join(', ')}]';
+      if (value.toMapValue() case final map?) {
+        final pairs = map.entries.map(
+          (e) =>
+              '${e.key == null ? 'null' : emit(e.key!)}: ${e.value == null ? 'null' : emit(e.value!)}',
+        );
+        return 'const $args{${pairs.join(', ')}}';
+      }
+      if (value.toSetValue() case final set?)
+        return 'const $args{${set.map(emit).join(', ')}}';
+      if (type.element case final EnumElement enumeration) {
+        for (final constant in enumeration.constants) {
+          if (constant.computeConstantValue() == value) {
+            return '${typeName(type, param)}.${constant.displayName}';
+          }
+        }
+      }
+      final call = value.constructorInvocation;
+      if (call != null &&
+          call.constructor.isAccessibleIn(lib) &&
+          call.constructor.enclosingElement.isAccessibleIn(lib)) {
+        final owner = typeName(
+          type.asInstanceOf(call.constructor.enclosingElement) ??
+              call.constructor.returnType,
+          param,
+        );
+        final name = call.constructor.name;
+        final parameters = [
+          ...call.positionalArguments.map(emit),
+          for (final entry in call.namedArguments.entries)
+            '${entry.key}: ${emit(entry.value)}',
+        ];
+        return "const $owner${name == 'new' ? '' : '.$name'}(${parameters.join(', ')})";
+      }
+    }
+    return _reject(
+      param,
+      'Declare an explicit default for ${param.displayName} that is accessible in this library.',
+    );
+  }
+
   String typeName(DartType type, Element field) {
     if (type is DynamicType) return 'dynamic';
+    if (type is NeverType) return _nullable(type) ? 'Never?' : 'Never';
+    if (type is TypeParameterType)
+      return type.element.displayName + (_nullable(type) ? '?' : '');
     if (type is! InterfaceType) _reject(field, 'Unsupported field type $type.');
     final arguments = type.typeArguments;
     final args = arguments.isEmpty
@@ -281,7 +436,34 @@ class _ModelEmitter {
         (_nullable(type) ? '?' : '');
   }
 
-  String codec(DartType type, Element field) {
+  String modelCodec(InterfaceType type, _Field f) {
+    final element = type.element;
+    final format =
+        '${_prefix(lib, element)}${_format(element.displayName)}.codec';
+    if (type.typeArguments.isEmpty) return format;
+    final args = _angles(type.typeArguments.map((t) => typeName(t, f.param)));
+    final codecs = [
+      for (var i = 0; i < type.typeArguments.length; i++)
+        'codec${element.typeParameters[i].displayName}: ${codec(type.typeArguments[i], f)}',
+    ];
+    return cached('$format$args(${codecs.join(', ')})');
+  }
+
+  String codec(DartType type, _Field f) => cached(_codec(type, f));
+
+  String _codec(DartType type, _Field f) {
+    final field = f.param;
+    final custom = f.custom;
+    if (custom != null && custom.accepts(type, lib)) {
+      final code = '${typeName(custom.type, field)}()';
+      return _nullable(type) && !_nullable(custom.valueType)
+          ? '$code.nullable()'
+          : code;
+    }
+    if (type is TypeParameterType) {
+      final code = 'codec${type.element.displayName}';
+      return _nullable(type) ? '$code.nullable()' : code;
+    }
     if (type is DynamicType || type.isDartCoreObject && _nullable(type)) {
       return '${api}FleeceCodecs.value';
     }
@@ -290,13 +472,13 @@ class _ModelEmitter {
     final codecs = '${api}FleeceCodecs';
     final String code;
     if (type.isDartCoreList) {
-      code = '$codecs.list(${codec(type.typeArguments.single, field)})';
+      code = '$codecs.list(${codec(type.typeArguments.single, f)})';
     } else if (type.isDartCoreMap) {
       final key = type.typeArguments.first;
       if (!key.isDartCoreString || _nullable(key)) {
         _reject(field, 'Fleece dictionary keys must have type String.');
       }
-      code = '$codecs.map(${codec(type.typeArguments.last, field)})';
+      code = '$codecs.map(${codec(type.typeArguments.last, f)})';
     } else if (element.library.isDartCore) {
       final member = const {
         'String': 'string',
@@ -315,7 +497,7 @@ class _ModelEmitter {
         name == 'Uint8List') {
       code = '$codecs.bytes';
     } else if (_model.hasAnnotationOfExact(element)) {
-      code = '${_prefix(lib, element)}${_format(name)}.codec';
+      code = modelCodec(type, f);
     } else if (element is EnumElement) {
       code = '$codecs.enumeration(${_prefix(lib, element)}$name.values)';
     } else if (_float32.isExactly(element)) {
@@ -333,14 +515,51 @@ class _ModelEmitter {
     return _nullable(type) ? '$code.nullable()' : code;
   }
 
+  _CustomCodec? customCodec(FormalParameterElement p, GetterElement getter) {
+    final annotation =
+        _useCodec.firstAnnotationOfExact(getter.variable) ??
+        _useCodec.firstAnnotationOfExact(getter) ??
+        _useCodec.firstAnnotationOfExact(p);
+    if (annotation == null) return null;
+    final type = annotation.getField('type')?.toTypeValue();
+    if (type is! InterfaceType || type.element is! ClassElement) {
+      _reject(p, '@FleeceUseCodec requires a concrete FleeceCodec class.');
+    }
+    final cls = type.element as ClassElement;
+    final ctor = cls.unnamedConstructor;
+    final base = type.allSupertypes
+        .where((t) => _codecType.isExactly(t.element))
+        .firstOrNull;
+    if (base == null ||
+        ctor == null ||
+        !ctor.isAccessibleIn(lib) ||
+        cls.isAbstract && !ctor.isFactory ||
+        ctor.formalParameters.any((p) => p.isRequired)) {
+      _reject(
+        p,
+        'Provide a FleeceCodec with an accessible zero-argument constructor.',
+      );
+    }
+    final codec = _CustomCodec(type, base.typeArguments.single);
+    var at = p.type;
+    while (!codec.accepts(at, lib)) {
+      if (at is! InterfaceType || !at.isDartCoreList && !at.isDartCoreMap) {
+        _reject(
+          p,
+          '${cls.displayName} encodes ${codec.valueType}, which does not match ${p.type}.',
+        );
+      }
+      at = at.typeArguments.last;
+    }
+    return codec;
+  }
+
   String generate(ConstructorElement ctor) {
     final name = cls.displayName, fields = <_Field>[], keys = <String>{};
     final schema = '_${name}Fields', format = _format(name);
     for (final p in ctor.formalParameters) {
       final getter = cls.thisType.lookUpGetter(p.displayName, lib);
-      if (p.isPrivate ||
-          getter == null ||
-          !lib.typeSystem.isSubtypeOf(getter.returnType, p.type)) {
+      if (p.isPrivate || getter == null || getter.returnType != p.type) {
         _reject(
           p,
           'Constructor parameter ${p.displayName} needs a public getter of the same type.',
@@ -352,7 +571,7 @@ class _ModelEmitter {
           _key.firstAnnotationOfExact(p);
       final key = rename?.getField('name')?.toStringValue() ?? p.displayName;
       if (!keys.add(key)) _reject(p, 'Duplicate Fleece key $key.');
-      fields.add(_Field(p, key));
+      fields.add(_Field(p, key, customCodec(p, getter)));
     }
     for (final field in storedFields(cls)) {
       if (!field.isPrivate &&
@@ -361,23 +580,58 @@ class _ModelEmitter {
           !fields.any((f) => f.name == field.displayName)) {
         _reject(
           field,
-          'Include stored field ${field.displayName} in the unnamed constructor.',
+          'Include stored field ${field.displayName} in the selected constructor.',
         );
       }
     }
 
+    final modelType = '$name$_args', bound = '$generated$_args';
+    final codecType = '${api}FleeceModelCodec<$modelType, $bound>';
     final out = StringBuffer()
-      ..writeln('typedef ${_boundType(name)} = $generated;')
-      ..writeln('extension $format on $name {')
+      ..writeln('typedef ${_boundType(name)}$_decl = $bound;')
+      ..writeln('extension $format$_decl on $modelType {');
+    if (_args.isEmpty) {
+      out.writeln('static final codec = $schema().modelCodec;');
+    } else {
+      out.writeln(
+        'static $codecType codec$_decl({$_codecParams}) => $schema$_args($_codecArgs).modelCodec;',
+      );
+    }
+    final sameCodecs = _args.isEmpty
+        ? ''
+        : ' && model._\$fleeceFields._uses(${_codecNames.join(', ')})';
+    out
       ..writeln(
-        'static final codec = ${api}FleeceModelCodec<$name, $generated>(_write$name, _read$name, $generated._);',
+        '$bytesType toFleece({$_codecParams ${api}SharedKeys? sharedKeys}) {',
       )
-      ..writeln('$bytesType toFleece({${api}SharedKeys? sharedKeys}) {')
       ..writeln('final model = this;')
       ..writeln(
-        'return model is $generated ? model._\$fleeceCursor.toBytes(sharedKeys: sharedKeys) : codec.encode(model, sharedKeys: sharedKeys); } }',
+        'return model is $bound$sameCodecs ? model._\$fleeceCursor.toBytes(sharedKeys: sharedKeys) : ${_formatCodec(format)}.encode(model, sharedKeys: sharedKeys); } }',
       )
-      ..writeln('abstract final class $schema {');
+      ..writeln('final class $schema$_decl {');
+    if (_args.isNotEmpty) {
+      for (final p in cls.typeParameters) {
+        out.writeln(
+          'final ${api}FleeceCodec<${p.displayName}> codec${p.displayName};',
+        );
+      }
+      final init = cls.typeParameters
+          .map((p) => 'required this.codec${p.displayName}')
+          .join(', ');
+      out.writeln('$schema({$init});');
+      final params = cls.typeParameters
+          .map(
+            (p) => '${api}FleeceCodec<${p.displayName}> other${p.displayName}',
+          )
+          .join(', ');
+      final same = cls.typeParameters
+          .map((p) => 'identical(codec${p.displayName}, other${p.displayName})')
+          .join(' && ');
+      out.writeln('bool _uses($params) => $same;');
+    }
+    out.writeln(
+      'late final modelCodec = $codecType(_write, _read, (cursor) => $bound._(cursor, this));',
+    );
     final constants = <FieldElement>{};
     for (final field in fields) {
       final expression = field.param.constantInitializer;
@@ -389,43 +643,77 @@ class _ModelEmitter {
     }
     for (final f in fields) {
       final type = f.param.type, t = typeName(type, f.param);
-      final defaultCode = f.param.defaultValueCode;
+      final defaultValue = defaultCode(f.param);
       // An optional argument preserves Dart's constant context for defaults.
-      final fallback = defaultCode != null
-          ? '([$t value = $defaultCode]) => value'
+      final fallback = defaultValue != null
+          ? '([$t value = $defaultValue]) => value'
           : _nullable(type)
           ? '() => null'
           : null;
       out.writeln(
-        'static final ${f.name} = ${api}FleeceField<$t>('
-        '${_literal(f.key)}, ${codec(type, f.param)}'
+        'late final ${f.slot} = ${api}FleeceField<$t>('
+        '${_literal(f.key)}, ${codec(type, f)}'
         '${fallback == null ? '' : ', whenMissing: $fallback'});',
       );
+      final nested = binding(type, 'cursor', f);
+      if (nested != null) {
+        out.writeln(
+          '${nested.type} bind\$${f.name}(${api}FleeceCursor cursor) => ${nested.read};',
+        );
+      }
     }
-    out
-      ..writeln('}')
-      ..writeln('void _write$name(${api}Encoder e, $name value) {')
-      ..writeln(
-        'if (value is $generated) { value._\$fleeceCursor.writeTo(e); return; }',
-      )
-      ..writeln('e.beginDict();');
+    out.writeln('void _write(${api}Encoder e, $modelType value) {');
+    out.writeln('if (value is $bound) {');
+    final affected = {
+      for (final field in fields)
+        field: codecParameters(field.param.type, field).toSet(),
+    }..removeWhere((_, params) => params.isEmpty);
+    if (affected.isNotEmpty) {
+      out.writeln('final source = value._\$fleeceFields;');
+      out.writeln('if (!source._uses(${_codecNames.join(', ')})) {');
+      out.writeln(
+        'value._\$fleeceCursor.writeTo(e, writeField: (key) { switch (key) {',
+      );
+      for (final entry in affected.entries) {
+        final field = entry.key;
+        final differs = entry.value
+            .map((n) => '!identical($n, source.$n)')
+            .join(' || ');
+        final guard = entry.value.length == _codecNames.length
+            ? ''
+            : ' when $differs';
+        out.writeln('case ${_literal(field.key)}$guard:');
+        out.writeln(
+          '${field.slot}.codec.write(e, value.${field.name}); return true;',
+        );
+      }
+      out.writeln('default: return false; } }); return; }');
+    }
+    out.writeln('value._\$fleeceCursor.writeTo(e); return; }');
+    out.writeln('e.beginDict();');
     final sorted = [...fields]..sort((a, b) => _compareNames(a.key, b.key));
     for (final f in sorted) {
-      out.writeln('$schema.${f.name}.write(e, value.${f.name});');
+      out.writeln('${f.slot}.write(e, value.${f.name});');
     }
     out
       ..writeln('e.endDict(); }')
-      ..writeln('$name _read$name(${api}ValueRef ref) {')
+      ..writeln('$modelType _read(${api}ValueRef ref) {')
       ..writeln(
         '${fields.isEmpty ? '' : 'final dict = '}${api}FleeceCodecs.dictionary(ref);',
       )
-      ..writeln('return $name(');
+      ..writeln(
+        'return $modelType${ctor.name == 'new' ? '' : '.${ctor.name}'}(',
+      );
     for (final f in fields) {
       out.writeln(
-        '${f.param.isNamed ? '${f.name}: ' : ''}$schema.${f.name}.read(dict[${_literal(f.key)}]),',
+        '${f.param.isNamed ? '${f.name}: ' : ''}${f.slot}.read(dict[${_literal(f.key)}]),',
       );
     }
     out.writeln('); }');
+    for (final entry in _codecs.entries) {
+      out.writeln('late final ${entry.value} = ${entry.key};');
+    }
+    out.writeln('}');
     writeModel(out, fields, ctor, schema, format);
     return out.toString();
   }
@@ -488,50 +776,97 @@ class _ModelEmitter {
         arguments = const [];
       }
     }
-    const cursor = r'_$fleeceCursor';
+    const cursor = r'_$fleeceCursor', fieldsVar = r'_$fleeceFields';
+    final modelType = '$name$_args', bound = '$generated$_args';
+    final formatCodec = _formatCodec(format);
     out
       ..writeln(
-        'final class $generated ${superCtor == null ? 'implements $name' : 'extends ${typeName(superCtor.returnType, cls)}'} {',
+        'final class $generated$_decl ${superCtor == null ? 'implements $modelType' : 'extends ${typeName(superCtor.returnType, cls)}'} {',
       )
       ..writeln(
-        'factory $generated($bytesType bytes, { $bytesType? base, ${api}SharedKeys? sharedKeys, ${api}FleeceTracking Function()? tracking }) =>',
+        'factory $generated($bytesType bytes, { $_codecParams $bytesType? base, ${api}SharedKeys? sharedKeys, ${api}FleeceTracking Function()? tracking }) =>',
       )
       ..writeln(
-        '$format.codec.open(bytes, base: base, sharedKeys: sharedKeys, tracking: tracking);',
+        '$formatCodec.open(bytes, base: base, sharedKeys: sharedKeys, tracking: tracking);',
       )
+      ..writeln('final $schema$_args $fieldsVar;')
       ..writeln('final ${api}FleeceCursor $cursor;');
+    if (cls.thisType.lookUpGetter('codec', lib) == null &&
+        cls.thisType.lookUpMethod('codec', lib) == null &&
+        cls.thisType.lookUpSetter('codec', lib) == null) {
+      out.writeln(
+        _args.isEmpty
+            ? 'static final codec = $formatCodec;'
+            : 'static ${api}FleeceModelCodec<$modelType, $bound> codec$_decl({$_codecParams}) => $formatCodec;',
+      );
+    }
     if (superCtor == null) {
-      out.writeln('$generated._(this.$cursor);');
+      out.writeln('$generated._(this.$cursor, this.$fieldsVar);');
     } else {
       final suffix = superCtor.name == 'new' ? '' : '.${superCtor.name}';
-      out.writeln('$generated._(this.$cursor) : super$suffix(');
+      out.writeln(
+        '$generated._(this.$cursor, this.$fieldsVar) : super$suffix(',
+      );
       for (final p in arguments) {
         final n = p.displayName;
-        out.writeln('${p.isNamed ? '$n: ' : ''}$cursor.initial($schema.$n),');
+        out.writeln(
+          '${p.isNamed ? '$n: ' : ''}$cursor.initial($fieldsVar.field\$$n),',
+        );
       }
       out.writeln(');');
     }
     for (final f in fields) {
       final type = f.param.type, t = typeName(type, f.param), n = f.name;
       final child = '_\$${n}Cursor';
-      final nested = binding(type, child);
+      final nested = binding(type, child, f);
       if (nested != null) {
-        out.writeln('late final $child = $cursor.child($schema.$n);');
-        out.writeln('@override ${nested.type} get $n => ${nested.read};');
+        out.writeln('late final $child = $cursor.child($fieldsVar.${f.slot});');
+        out.writeln(
+          '@override ${nested.type} get $n => $fieldsVar.bind\$$n($child);',
+        );
       } else {
-        out.writeln('@override $t get $n => $cursor.get($schema.$n);');
+        out.writeln(
+          '@override $t get $n => $cursor.get($fieldsVar.${f.slot});',
+        );
       }
-      out.writeln('set $n($t value) => $cursor.set($schema.$n, value);');
+      final setter = cls.thisType.lookUpSetter(n, lib);
+      if (setter?.isOriginDeclaration == true) {
+        out.writeln(
+          'set $n($t value) => $cursor.applySetter<$modelType>($fieldsVar.modelCodec, (model) => model.$n = value);',
+        );
+      } else {
+        out.writeln(
+          'set $n($t value) => $cursor.set($fieldsVar.${f.slot}, value);',
+        );
+      }
     }
     out
       ..writeln('}')
-      ..writeln('extension ${generated}Operations on $generated {')
-      ..writeln('$name toModel() => $cursor.read($format.codec);')
+      ..writeln('extension ${generated}Operations$_decl on $bound {')
+      ..writeln('$modelType toModel() => $cursor.read($fieldsVar.modelCodec);');
+    if (_args.isNotEmpty) {
+      final overrides = cls.typeParameters
+          .map(
+            (p) =>
+                '${api}FleeceCodec<${p.displayName}>? codec${p.displayName}, ',
+          )
+          .join();
+      final codecs = _codecNames.map((n) => '$n: $n ?? $fieldsVar.$n, ').join();
+      out.writeln(
+        '$bytesType toFleece({$overrides ${api}SharedKeys? sharedKeys}) => $format$_args(this).toFleece(${codecs}sharedKeys: sharedKeys);',
+      );
+    }
+    // A domain type parameter can itself be called R.
+    var result = 'R';
+    while (cls.typeParameters.any((p) => p.displayName == result)) {
+      result = '${result}Result';
+    }
+    out
       ..writeln(
-        '$resultType<R> transaction<R>($resultType<R> Function($generated) edit) => $cursor.transaction<$generated, R>($format.codec.bind, edit);',
+        '$resultType<$result> transaction<$result>($resultType<$result> Function($bound) edit) => $cursor.transaction<$bound, $result>($fieldsVar.modelCodec.bind, edit);',
       )
       ..writeln(
-        '$generated beginTransaction() => $cursor.beginTransaction($format.codec.bind);',
+        '$bound beginTransaction() => $cursor.beginTransaction($fieldsVar.modelCodec.bind);',
       )
       ..writeln('void commit() => $cursor.commit();')
       ..writeln('void rollback() => $cursor.rollback();')

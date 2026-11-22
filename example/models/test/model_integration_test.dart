@@ -10,6 +10,52 @@ import 'fixtures.dart';
 
 void main() {
   test(
+    'custom setters normalize, validate and update other fields atomically',
+    () {
+      final bytes = encode({'level': 8, 'future': FleeceInt.u32(10)});
+      final doc = GaugeRecord(bytes, tracking: FleeceSignals.new);
+      addTearDown(doc.dispose);
+      final seen = <(int, int)>[];
+      addTearDown(effect(() => seen.add((doc.level, doc.adjustments))));
+      final draft = doc.beginTransaction();
+      draft.raise(120);
+      expect(draft.full, isTrue);
+      expect(draft.adjustments, 1);
+      expect(() => draft.level = -1, throwsRangeError);
+      expect(doc.level, 8);
+      draft.rollback();
+      expect(doc.toFleece(), bytes);
+      final GaugeModel asDomain = doc;
+      asDomain.level = 120;
+      expect(seen, [(8, 0), (100, 1)]);
+      expect(
+        doc.toFleece(),
+        encode({'level': 100, 'adjustments': 1, 'future': FleeceInt.u32(10)}),
+      );
+    },
+  );
+
+  test(
+    'domain constructor writes stay private while opening or binding a draft',
+    () {
+      final bytes = encode({
+        'tags': ['stored'],
+      });
+      final doc = InitializedRecord(bytes, tracking: FleeceSignals.new);
+      addTearDown(doc.dispose);
+      final counts = <int>[];
+      addTearDown(effect(() => counts.add(doc.count)));
+      expect(doc.toFleece(), bytes);
+      doc.transaction<void>((draft) {
+        expect(draft.tags, ['stored']);
+        draft.tags.add('saved');
+      });
+      expect(doc.tags, ['stored', 'saved']);
+      expect(counts, [1, 2]);
+    },
+  );
+
+  test(
     'configured class names preserve nominal types, methods and setters',
     () {
       final base = encode({'count': 1, 'old': 'x' * 512});
@@ -198,8 +244,10 @@ void main() {
         PacketRecord(doc.toFleece()).toModel().precise!.bits,
         precise.bits,
       );
-      expect(() => doc.destinations.clear(), throwsUnsupportedError);
-      expect(() => doc.destinations['N']!.clear(), throwsUnsupportedError);
+      doc.destinations['N']!.clear();
+      expect(doc.destinations['N'], isEmpty);
+      doc.destinations.clear();
+      expect(doc.destinations, isEmpty);
       expect(
         () => FleeceCodecs.dateTime.decode(encode(FleeceDatetime(1, 1))),
         throwsFormatException,
@@ -221,7 +269,7 @@ void main() {
       final summaries = <String>[], counts = <int>[], tags = <List<String>>[];
       addTearDown(effect(() => summaries.add(summary.value)));
       addTearDown(effect(() => counts.add(doc.visits)));
-      addTearDown(effect(() => tags.add(doc.tags)));
+      addTearDown(effect(() => tags.add(doc.tags.toList())));
       final tx = doc.beginTransaction();
       tx.title = 'Published';
       tx.address.city = 'Paris';

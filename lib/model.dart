@@ -11,10 +11,13 @@ export 'fleece.dart'
         KeyPath,
         FleeceModel,
         FleeceKey,
+        FleeceUseCodec,
         FleeceCodec,
         FleeceModelCodec,
         FleeceCodecs,
         FleeceField,
         FleeceCursor,
+        FleeceList,
+        FleeceMap,
         FleeceTracking,
         FleeceDependency;

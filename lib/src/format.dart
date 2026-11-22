@@ -273,8 +273,8 @@ int _commonPrefix(List<String> names) {
 final class SharedKeys {
   static const maxKeys = 2048;
   static const maxKeyLength = 16;
-  final _keys = <String>[];
-  final _numbers = <String, int>{};
+  final List<String> _keys;
+  final Map<String, int> _numbers;
 
   int get length => _keys.length;
   bool get isEmpty => _keys.isEmpty;
@@ -305,7 +305,12 @@ final class SharedKeys {
   }
 
   Uint8List toState() => encode(_keys);
-  SharedKeys();
+  SharedKeys()
+      : _keys = [],
+        _numbers = {};
+  SharedKeys._snapshot(SharedKeys source)
+      : _keys = List.unmodifiable(source._keys),
+        _numbers = Map.unmodifiable(source._numbers);
   factory SharedKeys.fromState(Uint8List state) {
     final root = Doc(state).root;
     final values = root.asArray;

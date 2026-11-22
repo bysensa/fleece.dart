@@ -6,6 +6,8 @@ import 'dart:typed_data';
 import 'package:fleece/fleece.dart';
 import 'package:geobase/geobase.dart' as geo;
 
+import '../example/models/lib/note.dart';
+
 // The result escapes the timed call, like black_box in the Rust benchmark.
 @pragma('vm:entry-point')
 Object? _lastResult;
@@ -212,8 +214,72 @@ void _geometry() {
   });
 }
 
+void _models() {
+  for (final count in [16, 1024]) {
+    final note = Note(
+        title: 'Notes',
+        address: const Address('Lyon'),
+        tags: List.generate(count, (i) => 'tag-$i'));
+    final bytes = note.toFleece();
+    final split = NoteRecord(bytes), grouped = NoteRecord(bytes);
+    bool first = false, second = false;
+    void edit(NoteRecord model, bool on) {
+      final tags = model.tags;
+      for (var i = 0; i < 8; i++) {
+        tags[i] = on ? 'new-$i' : 'tag-$i';
+      }
+    }
+
+    Object separate() {
+      edit(split, first = !first);
+      return split;
+    }
+
+    Object together() {
+      grouped.transaction<void>((draft) => edit(draft, second = !second));
+      return grouped;
+    }
+
+    for (var i = 0; i < 2; i++) {
+      separate();
+      together();
+      final a = split.toFleece(), b = grouped.toFleece();
+      final expected = Note(title: note.title, address: note.address, tags: [
+        for (var j = 0; j < count; j++) first && j < 8 ? 'new-$j' : 'tag-$j'
+      ]).toFleece();
+      if (a.length != expected.length ||
+          b.length != expected.length ||
+          expected
+              .asMap()
+              .entries
+              .any((e) => a[e.key] != e.value || b[e.key] != e.value)) {
+        throw StateError('Typed edits produced different bytes');
+      }
+    }
+    print('Note: $count tags, ${bytes.length} bytes');
+    _measure('model: encode Dart object', note.toFleece);
+    _measure('model: decode Dart object', () => NoteRecord.codec.decode(bytes));
+    _measure('model: open, read address.city and dispose', () {
+      final doc = NoteRecord(bytes);
+      final city = doc.address.city;
+      doc.dispose();
+      return city;
+    });
+    _measure(
+        'model: read address.city on open document', () => split.address.city);
+    _measure('model: edit eight tags in eight commits', separate);
+    _measure('model: edit eight tags in one commit', together);
+    split.dispose();
+    grouped.dispose();
+  }
+}
+
 /// Native Dart counterpart of crates/fleece/benches/throughput.rs.
 void main(List<String> args) {
+  if (args.length == 1 && args.first == '--models') {
+    _models();
+    return;
+  }
   final profile = args.length == 2 && args.first == '--profile-encode';
   final wideRoot = args.length == 1 && args.first == '--wide-root';
   final dictionaries = args.length == 1 && args.first == '--dict-strings';
@@ -224,7 +290,7 @@ void main(List<String> args) {
       !(args.length == 2 && args.first == '--write-inputs') &&
       !(profile && seconds > 0)) {
     stderr.writeln(
-        'Usage: throughput [--write-inputs DIRECTORY | --profile-encode SECONDS | --wide-root | --dict-strings]');
+        'Usage: throughput [--write-inputs DIRECTORY | --profile-encode SECONDS | --wide-root | --dict-strings | --models]');
     exitCode = 64;
     return;
   }

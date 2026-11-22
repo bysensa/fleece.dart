@@ -939,16 +939,16 @@ final class Encoder {
   /// Copies a value from any document, preserving the encoding of scalars.
   void writeCopy(ValueRef value) => _copyWithRoom(value, _ReadRoom(value.doc));
 
-  void _copyWithRoom(ValueRef value, _ReadRoom room) {
+  void _copyWithRoom(ValueRef value, _ReadRoom room, {bool canonical = false}) {
     try {
-      _copy(value, room);
+      _copy(value, room, canonical);
     } on FormatException catch (e) {
       throw _EncoderState(
           EncodeErrorCode.invalidValue, 'Invalid value to copy', e);
     }
   }
 
-  void _copy(ValueRef value, _ReadRoom room) {
+  void _copy(ValueRef value, _ReadRoom room, bool canonical) {
     room.takeValue();
     final h = value._header;
     switch (h.type) {
@@ -958,24 +958,14 @@ final class Encoder {
       case ValueType.array:
         beginArray();
         for (final child in value.asArray!) {
-          _copy(child, room);
+          _copy(child, room, canonical);
         }
         endArray();
       case ValueType.dict:
-        beginDict();
-        final dict = value.asDict!;
-        if (!dict._gaveAll)
-          throw _EncoderState(
-              EncodeErrorCode.invalidValue, 'Invalid dictionary entry');
-        for (final entry in dict.entries) {
-          room.takeBytes(_utf8(entry.key).length);
-          writeKey(entry.key);
-          _copy(entry.value, room);
-        }
-        endDict();
+        _copyDict(value.asDict!, room, canonical);
       case ValueType.extended when h.arg != 0:
         beginExt(h.arg);
-        _copy(value.doc.valueAt(value.position + 2), room);
+        _copy(value.doc.valueAt(value.position + 2), room, canonical);
       default:
         if (h.type == ValueType.data) room.takeBytes(h.arg);
         final bytes = value.doc._tail(value.position);
@@ -983,6 +973,23 @@ final class Encoder {
           _malformed('Truncated value', value.position);
         _scalar(Uint8List.sublistView(bytes, 0, h.size));
     }
+  }
+
+  void _copyDict(DictRef dict, _ReadRoom room, bool canonical,
+      {bool Function(String key)? writeField}) {
+    if (!dict._gaveAll) {
+      throw _EncoderState(
+          EncodeErrorCode.invalidValue, 'Invalid dictionary entry');
+    }
+    beginDict();
+    for (final entry in dict._orderedEntries(canonical)) {
+      room.takeBytes(_utf8(entry.key).length);
+      writeKey(entry.key);
+      if (writeField == null || !writeField(entry.key)) {
+        _copy(entry.value, room, canonical);
+      }
+    }
+    endDict();
   }
 
   Uint8List finish() {

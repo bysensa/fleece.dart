@@ -45,11 +45,13 @@ void main() {
 
 ```dart
 final bytes = const Note(title: 'Поездка', address: Address('Минск')).toFleece();
+final Note detached = NoteRecord.codec.decode(bytes);
 final note = NoteRecord(bytes, tracking: FleeceSignals.new);
 final stop = effect(() => print('${note.address.city}: ${note.visits}'));
 
 note.transaction<void>((draft) {
   draft.address.city = 'Брест';
+  draft.tags.add('маршрут');
   draft.visits++;
 });
 
@@ -59,7 +61,9 @@ stop();
 note.dispose();
 ```
 
-Одиночное присваивание, например `note.title = 'Отчёт'`, открывает и фиксирует одну транзакцию. Вызов `transaction` объединяет несколько правок в один коммит и одно уведомление эффекта. Коммит собирает достижимые значения в компактный Fleece-буфер. `note.toFleece()` возвращает байты для сохранения. [Настройка имён, модели и запускаемый пример](example/models/README.md)
+Методы `NoteRecord.codec.encode(note)` и `NoteRecord.codec.decode(bytes)` сериализуют обычные Dart-классы напрямую в Fleece и обратно. Для параметра обобщённой модели передаётся кодек его типа. Аннотация `@FleeceModel(constructor: 'stored')` выбирает именованный конструктор, а `@FleeceUseCodec(...)` задаёт бинарное представление прикладного типа.
+
+Присваивание `note.title = 'Отчёт'` и операция `note.tags.addAll(tags)` фиксируют по одной транзакции. Вызов `transaction` объединяет несколько правок в один коммит и одно уведомление каждого затронутого эффекта. Коммит собирает достижимые значения в компактный Fleece-буфер. `note.toFleece()` возвращает байты для сохранения. [Настройка имён, модели и запускаемый пример](example/models/README.md)
 
 ## Общие ключи и дельты
 
@@ -128,6 +132,16 @@ dart pub get
 dart analyze
 dart test --run-skipped
 dart test -p node --run-skipped
+```
+
+Генератор, транзакционные коллекции и интеграция с сигналами проходят отдельный набор тестов. Он также создаёт чистый пакет-потребитель, запускает в нём `build_runner` и проверяет диагностику ошибочных схем.
+
+```sh
+cd example/models
+dart pub get
+dart run build_runner build
+dart test
+dart test -p node
 ```
 
 В пакет входят побайтовые примеры Fleece и всех расширений, а также фиксированные данные, полученные из Rust. Они проверяются на Dart VM и в Node.js. Флаг `--run-skipped` включает измерение стоимости наследуемых словарей, пропускаемое по умолчанию в исходном наборе.

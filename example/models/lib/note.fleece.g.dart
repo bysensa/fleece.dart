@@ -10,45 +10,47 @@ part of 'note.dart';
 typedef $AddressFleece = AddressRecord;
 
 extension $AddressFleeceFormat on Address {
-  static final codec = FleeceModelCodec<Address, AddressRecord>(
-    _writeAddress,
-    _readAddress,
-    AddressRecord._,
-  );
+  static final codec = _AddressFields().modelCodec;
   Uint8List toFleece({SharedKeys? sharedKeys}) {
     final model = this;
     return model is AddressRecord
         ? model._$fleeceCursor.toBytes(sharedKeys: sharedKeys)
-        : codec.encode(model, sharedKeys: sharedKeys);
+        : $AddressFleeceFormat.codec.encode(model, sharedKeys: sharedKeys);
   }
 }
 
-abstract final class _AddressFields {
-  static final city = FleeceField<String>("city", FleeceCodecs.string);
-  static final postcode = FleeceField<String?>(
+final class _AddressFields {
+  late final modelCodec = FleeceModelCodec<Address, AddressRecord>(
+    _write,
+    _read,
+    (cursor) => AddressRecord._(cursor, this),
+  );
+  late final field$city = FleeceField<String>("city", FleeceCodecs.string);
+  late final field$postcode = FleeceField<String?>(
     "postcode",
-    FleeceCodecs.string.nullable(),
+    _codec$0,
     whenMissing: () => null,
   );
-}
-
-void _writeAddress(Encoder e, Address value) {
-  if (value is AddressRecord) {
-    value._$fleeceCursor.writeTo(e);
-    return;
+  void _write(Encoder e, Address value) {
+    if (value is AddressRecord) {
+      value._$fleeceCursor.writeTo(e);
+      return;
+    }
+    e.beginDict();
+    field$city.write(e, value.city);
+    field$postcode.write(e, value.postcode);
+    e.endDict();
   }
-  e.beginDict();
-  _AddressFields.city.write(e, value.city);
-  _AddressFields.postcode.write(e, value.postcode);
-  e.endDict();
-}
 
-Address _readAddress(ValueRef ref) {
-  final dict = FleeceCodecs.dictionary(ref);
-  return Address(
-    _AddressFields.city.read(dict["city"]),
-    postcode: _AddressFields.postcode.read(dict["postcode"]),
-  );
+  Address _read(ValueRef ref) {
+    final dict = FleeceCodecs.dictionary(ref);
+    return Address(
+      field$city.read(dict["city"]),
+      postcode: field$postcode.read(dict["postcode"]),
+    );
+  }
+
+  late final _codec$0 = FleeceCodecs.string.nullable();
 }
 
 final class AddressRecord implements Address {
@@ -63,26 +65,29 @@ final class AddressRecord implements Address {
     sharedKeys: sharedKeys,
     tracking: tracking,
   );
+  final _AddressFields _$fleeceFields;
   final FleeceCursor _$fleeceCursor;
-  AddressRecord._(this._$fleeceCursor);
+  static final codec = $AddressFleeceFormat.codec;
+  AddressRecord._(this._$fleeceCursor, this._$fleeceFields);
   @override
-  String get city => _$fleeceCursor.get(_AddressFields.city);
-  set city(String value) => _$fleeceCursor.set(_AddressFields.city, value);
+  String get city => _$fleeceCursor.get(_$fleeceFields.field$city);
+  set city(String value) =>
+      _$fleeceCursor.set(_$fleeceFields.field$city, value);
   @override
-  String? get postcode => _$fleeceCursor.get(_AddressFields.postcode);
+  String? get postcode => _$fleeceCursor.get(_$fleeceFields.field$postcode);
   set postcode(String? value) =>
-      _$fleeceCursor.set(_AddressFields.postcode, value);
+      _$fleeceCursor.set(_$fleeceFields.field$postcode, value);
 }
 
 extension AddressRecordOperations on AddressRecord {
-  Address toModel() => _$fleeceCursor.read($AddressFleeceFormat.codec);
+  Address toModel() => _$fleeceCursor.read(_$fleeceFields.modelCodec);
   FutureOr<R> transaction<R>(FutureOr<R> Function(AddressRecord) edit) =>
       _$fleeceCursor.transaction<AddressRecord, R>(
-        $AddressFleeceFormat.codec.bind,
+        _$fleeceFields.modelCodec.bind,
         edit,
       );
   AddressRecord beginTransaction() =>
-      _$fleeceCursor.beginTransaction($AddressFleeceFormat.codec.bind);
+      _$fleeceCursor.beginTransaction(_$fleeceFields.modelCodec.bind);
   void commit() => _$fleeceCursor.commit();
   void rollback() => _$fleeceCursor.rollback();
   bool get isActive => _$fleeceCursor.isActive;
@@ -93,75 +98,85 @@ extension AddressRecordOperations on AddressRecord {
 typedef $NoteFleece = NoteRecord;
 
 extension $NoteFleeceFormat on Note {
-  static final codec = FleeceModelCodec<Note, NoteRecord>(
-    _writeNote,
-    _readNote,
-    NoteRecord._,
-  );
+  static final codec = _NoteFields().modelCodec;
   Uint8List toFleece({SharedKeys? sharedKeys}) {
     final model = this;
     return model is NoteRecord
         ? model._$fleeceCursor.toBytes(sharedKeys: sharedKeys)
-        : codec.encode(model, sharedKeys: sharedKeys);
+        : $NoteFleeceFormat.codec.encode(model, sharedKeys: sharedKeys);
   }
 }
 
-abstract final class _NoteFields {
-  static final title = FleeceField<String>(
+final class _NoteFields {
+  late final modelCodec = FleeceModelCodec<Note, NoteRecord>(
+    _write,
+    _read,
+    (cursor) => NoteRecord._(cursor, this),
+  );
+  late final field$title = FleeceField<String>(
     "display.title",
     FleeceCodecs.string,
   );
-  static final address = FleeceField<Address>(
+  late final field$address = FleeceField<Address>(
     "address",
     $AddressFleeceFormat.codec,
   );
-  static final visits = FleeceField<int>(
+  AddressRecord bind$address(FleeceCursor cursor) =>
+      cursor.object($AddressFleeceFormat.codec.bind);
+  late final field$visits = FleeceField<int>(
     "visits",
     FleeceCodecs.integer,
     whenMissing: ([int value = 0]) => value,
   );
-  static final priority = FleeceField<Priority>(
+  late final field$priority = FleeceField<Priority>(
     "priority",
-    FleeceCodecs.enumeration(Priority.values),
+    _codec$0,
     whenMissing: ([Priority value = Priority.normal]) => value,
   );
-  static final tags = FleeceField<List<String>>(
+  late final field$tags = FleeceField<List<String>>(
     "tags",
-    FleeceCodecs.list(FleeceCodecs.string),
+    _codec$1,
     whenMissing: ([List<String> value = const []]) => value,
   );
-  static final secondary = FleeceField<Address?>(
+  FleeceList<String, String> bind$tags(FleeceCursor cursor) =>
+      cursor.list<String, String>(FleeceCodecs.string);
+  late final field$secondary = FleeceField<Address?>(
     "secondary",
-    $AddressFleeceFormat.codec.nullable(),
+    _codec$2,
     whenMissing: () => null,
   );
-}
-
-void _writeNote(Encoder e, Note value) {
-  if (value is NoteRecord) {
-    value._$fleeceCursor.writeTo(e);
-    return;
+  AddressRecord? bind$secondary(FleeceCursor cursor) =>
+      cursor.optionalObject($AddressFleeceFormat.codec.bind);
+  void _write(Encoder e, Note value) {
+    if (value is NoteRecord) {
+      value._$fleeceCursor.writeTo(e);
+      return;
+    }
+    e.beginDict();
+    field$address.write(e, value.address);
+    field$title.write(e, value.title);
+    field$priority.write(e, value.priority);
+    field$secondary.write(e, value.secondary);
+    field$tags.write(e, value.tags);
+    field$visits.write(e, value.visits);
+    e.endDict();
   }
-  e.beginDict();
-  _NoteFields.address.write(e, value.address);
-  _NoteFields.title.write(e, value.title);
-  _NoteFields.priority.write(e, value.priority);
-  _NoteFields.secondary.write(e, value.secondary);
-  _NoteFields.tags.write(e, value.tags);
-  _NoteFields.visits.write(e, value.visits);
-  e.endDict();
-}
 
-Note _readNote(ValueRef ref) {
-  final dict = FleeceCodecs.dictionary(ref);
-  return Note(
-    title: _NoteFields.title.read(dict["display.title"]),
-    address: _NoteFields.address.read(dict["address"]),
-    visits: _NoteFields.visits.read(dict["visits"]),
-    priority: _NoteFields.priority.read(dict["priority"]),
-    tags: _NoteFields.tags.read(dict["tags"]),
-    secondary: _NoteFields.secondary.read(dict["secondary"]),
-  );
+  Note _read(ValueRef ref) {
+    final dict = FleeceCodecs.dictionary(ref);
+    return Note(
+      title: field$title.read(dict["display.title"]),
+      address: field$address.read(dict["address"]),
+      visits: field$visits.read(dict["visits"]),
+      priority: field$priority.read(dict["priority"]),
+      tags: field$tags.read(dict["tags"]),
+      secondary: field$secondary.read(dict["secondary"]),
+    );
+  }
+
+  late final _codec$0 = FleeceCodecs.enumeration(Priority.values);
+  late final _codec$1 = FleeceCodecs.list(FleeceCodecs.string);
+  late final _codec$2 = $AddressFleeceFormat.codec.nullable();
 }
 
 final class NoteRecord implements Note {
@@ -176,43 +191,53 @@ final class NoteRecord implements Note {
     sharedKeys: sharedKeys,
     tracking: tracking,
   );
+  final _NoteFields _$fleeceFields;
   final FleeceCursor _$fleeceCursor;
-  NoteRecord._(this._$fleeceCursor);
+  static final codec = $NoteFleeceFormat.codec;
+  NoteRecord._(this._$fleeceCursor, this._$fleeceFields);
   @override
-  String get title => _$fleeceCursor.get(_NoteFields.title);
-  set title(String value) => _$fleeceCursor.set(_NoteFields.title, value);
-  late final _$addressCursor = _$fleeceCursor.child(_NoteFields.address);
+  String get title => _$fleeceCursor.get(_$fleeceFields.field$title);
+  set title(String value) =>
+      _$fleeceCursor.set(_$fleeceFields.field$title, value);
+  late final _$addressCursor = _$fleeceCursor.child(
+    _$fleeceFields.field$address,
+  );
   @override
-  AddressRecord get address =>
-      _$addressCursor.object($AddressFleeceFormat.codec.bind);
-  set address(Address value) => _$fleeceCursor.set(_NoteFields.address, value);
+  AddressRecord get address => _$fleeceFields.bind$address(_$addressCursor);
+  set address(Address value) =>
+      _$fleeceCursor.set(_$fleeceFields.field$address, value);
   @override
-  int get visits => _$fleeceCursor.get(_NoteFields.visits);
-  set visits(int value) => _$fleeceCursor.set(_NoteFields.visits, value);
+  int get visits => _$fleeceCursor.get(_$fleeceFields.field$visits);
+  set visits(int value) =>
+      _$fleeceCursor.set(_$fleeceFields.field$visits, value);
   @override
-  Priority get priority => _$fleeceCursor.get(_NoteFields.priority);
+  Priority get priority => _$fleeceCursor.get(_$fleeceFields.field$priority);
   set priority(Priority value) =>
-      _$fleeceCursor.set(_NoteFields.priority, value);
+      _$fleeceCursor.set(_$fleeceFields.field$priority, value);
+  late final _$tagsCursor = _$fleeceCursor.child(_$fleeceFields.field$tags);
   @override
-  List<String> get tags => _$fleeceCursor.get(_NoteFields.tags);
-  set tags(List<String> value) => _$fleeceCursor.set(_NoteFields.tags, value);
-  late final _$secondaryCursor = _$fleeceCursor.child(_NoteFields.secondary);
+  FleeceList<String, String> get tags => _$fleeceFields.bind$tags(_$tagsCursor);
+  set tags(List<String> value) =>
+      _$fleeceCursor.set(_$fleeceFields.field$tags, value);
+  late final _$secondaryCursor = _$fleeceCursor.child(
+    _$fleeceFields.field$secondary,
+  );
   @override
   AddressRecord? get secondary =>
-      _$secondaryCursor.optionalObject($AddressFleeceFormat.codec.bind);
+      _$fleeceFields.bind$secondary(_$secondaryCursor);
   set secondary(Address? value) =>
-      _$fleeceCursor.set(_NoteFields.secondary, value);
+      _$fleeceCursor.set(_$fleeceFields.field$secondary, value);
 }
 
 extension NoteRecordOperations on NoteRecord {
-  Note toModel() => _$fleeceCursor.read($NoteFleeceFormat.codec);
+  Note toModel() => _$fleeceCursor.read(_$fleeceFields.modelCodec);
   FutureOr<R> transaction<R>(FutureOr<R> Function(NoteRecord) edit) =>
       _$fleeceCursor.transaction<NoteRecord, R>(
-        $NoteFleeceFormat.codec.bind,
+        _$fleeceFields.modelCodec.bind,
         edit,
       );
   NoteRecord beginTransaction() =>
-      _$fleeceCursor.beginTransaction($NoteFleeceFormat.codec.bind);
+      _$fleeceCursor.beginTransaction(_$fleeceFields.modelCodec.bind);
   void commit() => _$fleeceCursor.commit();
   void rollback() => _$fleeceCursor.rollback();
   bool get isActive => _$fleeceCursor.isActive;

@@ -77,3 +77,58 @@ class _Meter implements _MeterModel {
   @override
   bool get odd => tick.isOdd;
 }
+
+class UriCodec extends fl.FleeceCodec<Uri> {
+  const UriCodec() : super(_write, _read);
+  static void _write(fl.Encoder encoder, Uri uri) =>
+      encoder.writeString(uri.toString());
+  static Uri _read(fl.ValueRef ref) =>
+      Uri.parse(fl.FleeceCodecs.string.read(ref));
+}
+
+@fl.FleeceModel(constructor: 'stored')
+class Envelope<T> {
+  const Envelope.stored(
+    this.value, {
+    this.history = const [],
+    this.links = const {},
+  });
+  final T value;
+  final List<T?> history;
+  @fl.FleeceUseCodec(UriCodec)
+  final Map<String, List<Uri?>> links;
+}
+
+@fl.FleeceModel()
+class Ledger<R extends num> {
+  const Ledger(this.envelope, this.amount);
+  final Envelope<notes.Address> envelope;
+  final R amount;
+  R get balance => amount;
+}
+
+@fl.FleeceModel()
+class InitializedModel {
+  InitializedModel(this.tags) {
+    this.tags.add('initialized');
+    if (this.tags.last != 'initialized') throw StateError('initializer lost');
+  }
+  final List<String> tags;
+  int get count => tags.length;
+}
+
+@fl.FleeceModel()
+class GaugeModel {
+  GaugeModel(int level, {this.adjustments = 0}) : _level = level;
+  int _level;
+  int adjustments;
+  int get level => _level;
+  set level(int value) {
+    if (value < 0) throw RangeError.value(value);
+    _level = value.clamp(0, 100);
+    adjustments++;
+  }
+
+  void raise(int by) => level += by;
+  bool get full => level == 100;
+}

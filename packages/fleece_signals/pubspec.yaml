@@ -1,5 +1,5 @@
 name: fleece_signals
-description: Field-level signals for transactional Fleece document views.
+description: Field-level reactivity for transactional Fleece models.
 version: 0.1.0
 publish_to: none
 environment:

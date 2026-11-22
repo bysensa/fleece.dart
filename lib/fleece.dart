@@ -28,6 +28,7 @@ part 'src/debug_unicode.dart';
 part 'src/serde.dart';
 part 'src/model_codec.dart';
 part 'src/model_document.dart';
+part 'src/model_collections.dart';
 part 'src/key.dart';
 part 'src/kind.dart';
 

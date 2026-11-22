@@ -14,6 +14,27 @@ Uint8List _hex(String text) => Uint8List.fromList([
 const _note = Note(title: 'Field notes', address: Address('Lyon'));
 
 void main() {
+  test('DateTime preserves microseconds across the full UTC calendar range',
+      () {
+    for (final time in [
+      DateTime.utc(1500, 2, 3, 4, 5, 6, 7, 891),
+      DateTime.utc(2400, 2, 3, 4, 5, 6, 7, 891),
+      DateTime.utc(-271821, 4, 20, 0, 0, 0, 0, 1),
+      DateTime.utc(275760, 9, 12, 23, 59, 59, 999, 999),
+      DateTime.utc(275760, 9, 13),
+    ]) {
+      final millis = time.millisecondsSinceEpoch;
+      final seconds = (millis - millis % 1000) ~/ 1000;
+      final expected = encode(FleeceDatetime(
+          seconds, time.millisecond * 1000000 + time.microsecond * 1000));
+      expect(FleeceCodecs.dateTime.encode(time), expected,
+          reason: time.toString());
+      expect(FleeceCodecs.dateTime.decode(expected), time);
+    }
+    final beyond = encode(FleeceDatetime(BigInt.from(8640000000000), 1000));
+    expect(() => FleeceCodecs.dateTime.decode(beyond), throwsFormatException);
+  });
+
   test(
       'direct setters and nested transactions operate on the original field names',
       () {
@@ -103,6 +124,16 @@ void main() {
             .having((e) => e.message, 'field', contains('visits'))));
     expect(() => NoteRecord(encode({'address': {}})).toModel(),
         throwsFormatException);
+    final invalidChild = encode({
+      ...fields,
+      'address': {'city': 7}
+    });
+    final at =
+        Doc(invalidChild).root.asDict!['address']!.asDict!['city']!.position;
+    expect(
+        () => NoteRecord.codec.decode(invalidChild),
+        throwsA(
+            isA<FormatException>().having((e) => e.offset, 'city offset', at)));
     expect(
         () => NoteRecord(encode({...fields, 'priority': 'unknown'})).toModel(),
         throwsFormatException);
@@ -163,7 +194,8 @@ void main() {
     tx.commit();
     expect(doc.tags.length, 1200);
     expect(doc.tags.first, 'word-0');
-    expect(() => doc.tags.add('oops'), throwsUnsupportedError);
+    doc.tags.add('last word');
+    expect(doc.tags.last, 'last word');
     final changed = doc.toFleece();
     doc.toFleece().fillRange(0, changed.length, 0);
     expect(doc.toFleece(), changed);
@@ -214,6 +246,33 @@ void main() {
     tx.visits = 80;
     tx.rollback();
     expect(doc.toFleece(), saved);
+  });
+
+  test('only the callback owner can publish or close a managed draft',
+      () async {
+    final doc = NoteRecord(_note.toFleece());
+    addTearDown(doc.dispose);
+    final original = doc.toFleece();
+    expect(
+        () => doc.transaction<void>((d) {
+              d.title = 'early';
+              d.address.commit();
+            }),
+        throwsStateError);
+    expect(doc.toFleece(), original);
+    await expectLater(doc.transaction<void>((d) async {
+      d.tags.add('partial');
+      await Future<void>.value();
+      d.commit();
+    }), throwsStateError);
+    expect(doc.toFleece(), original);
+    doc.transaction<void>((d) {
+      d.title = 'complete';
+      expect(d.dispose, throwsStateError);
+      expect(d.rollback, throwsStateError);
+      expect(doc.title, _note.title);
+    });
+    expect(doc.title, 'complete');
   });
 
   test(
