@@ -1,0 +1,8 @@
+targets:
+  $default:
+    builders:
+      fleece_generator:fleece_model:
+        options:
+          class_name: '{name}Record'
+          strip_prefix: '_'
+          strip_suffix: Model

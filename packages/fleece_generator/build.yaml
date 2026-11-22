@@ -1,0 +1,7 @@
+builders:
+  fleece_model:
+    import: "package:fleece_generator/builder.dart"
+    builder_factories: ["fleeceModelBuilder"]
+    build_extensions: {".dart": [".fleece.g.dart"]}
+    auto_apply: dependents
+    build_to: source

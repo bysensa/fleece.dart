@@ -103,15 +103,20 @@ T _deltaOperation<T>(T Function() run) {
 const _remove = _PatchNode.remove();
 
 final class _PatchNode {
-  _PatchNode.inside()
+  _PatchNode.inside([this.source])
       : value = null,
         children = <Object, _PatchNode>{};
-  const _PatchNode.set(this.value) : children = null;
+  const _PatchNode.set(this.value)
+      : children = null,
+        source = null;
   const _PatchNode.remove()
       : value = null,
+        source = null,
         children = null;
   final Object? value;
   final Map<Object, _PatchNode>? children;
+  // A typed transaction can replace a whole subtree and then edit its fields.
+  final ValueRef? source;
 }
 
 final class Patch {
@@ -154,11 +159,14 @@ Uint8List? extract(Doc doc, KeyPath path) => _deltaOperation(() {
 extension UpdateEncoder on Encoder {
   void writeUpdated(ValueRef value, Patch patch) => _deltaOperation(() {
         // A changed branch may discard an invalid subtree. Charge only copied
-        // subtrees, against one shared budget for the whole edit.
-        final room = _ReadRoom(value.doc);
-        void copy(ValueRef v) => _copyWithRoom(v, room);
-
-        void visit(ValueRef? at, _PatchNode node) {
+        // subtrees. A staged, independently validated replacement has its own
+        // source buffer and expansion budget.
+        void visit(ValueRef? at, _PatchNode node, _ReadRoom room) {
+          final source = node.source;
+          if (source != null) {
+            at = source;
+            room = _ReadRoom(source.doc);
+          }
           final children = node.children;
           if (children == null) {
             if (identical(node, _remove))
@@ -167,7 +175,7 @@ extension UpdateEncoder on Encoder {
             return;
           }
           if (children.isEmpty && at != null) {
-            copy(at);
+            _copyWithRoom(at, room);
             return;
           }
           final dict = at?.asDict;
@@ -181,9 +189,9 @@ extension UpdateEncoder on Encoder {
                 if (identical(change, _remove)) continue;
                 writeKey(e.key);
                 if (change == null) {
-                  copy(e.value);
+                  _copyWithRoom(e.value, room);
                 } else {
-                  visit(e.value, change);
+                  visit(e.value, change, room);
                 }
               }
             }
@@ -191,7 +199,7 @@ extension UpdateEncoder on Encoder {
               final change = children[key]!;
               if (dict?[key] == null && !identical(change, _remove)) {
                 writeKey(key);
-                visit(null, change);
+                visit(null, change, room);
               }
             }
             endDict();
@@ -210,16 +218,17 @@ extension UpdateEncoder on Encoder {
           for (var i = 0; i < array.length; i++) {
             final change = changes[i];
             if (change == null) {
-              copy(array.get(i) ?? value.doc.valueAt(-1));
+              _copyWithRoom(array.get(i) ?? value.doc.valueAt(-1), room);
             } else if (!identical(change, _remove)) {
-              visit(array[i], change);
+              visit(array[i], change, room);
             }
           }
           final tail = changes[array.length];
-          if (tail != null && !identical(tail, _remove)) visit(null, tail);
+          if (tail != null && !identical(tail, _remove))
+            visit(null, tail, room);
           endArray();
         }
 
-        visit(value, patch._root);
+        visit(value, patch._root, _ReadRoom(value.doc));
       });
 }

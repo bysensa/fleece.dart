@@ -1,0 +1,10 @@
+name: fleece_generator
+description: Generates document-backed Dart classes and direct Fleece codecs.
+version: 0.1.0
+publish_to: none
+environment:
+  sdk: '>=3.11.0 <4.0.0'
+dependencies:
+  analyzer: '>=14.3.0 <15.0.0'
+  build: ^4.0.0
+  source_gen: ^4.3.1

@@ -1,0 +1,10 @@
+name: fleece_signals
+description: Field-level signals for transactional Fleece document views.
+version: 0.1.0
+publish_to: none
+environment:
+  sdk: '>=3.5.0 <4.0.0'
+dependencies:
+  fleece:
+    path: ../..
+  signals_core: ^7.0.0

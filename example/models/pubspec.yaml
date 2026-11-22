@@ -1,0 +1,16 @@
+name: fleece_model_example
+description: Document-backed Dart models with typed Fleece serialization and transactions.
+publish_to: none
+environment:
+  sdk: '>=3.11.0 <4.0.0'
+dependencies:
+  fleece:
+    path: ../..
+  fleece_signals:
+    path: ../../packages/fleece_signals
+  signals_core: ^7.0.0
+dev_dependencies:
+  build_runner: ^2.4.13
+  fleece_generator:
+    path: ../../packages/fleece_generator
+  test: ^1.25.0

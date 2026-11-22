@@ -1,6 +1,7 @@
 /// Binary Fleece documents, including the extensions defined by the-base.
 library;
 
+import 'dart:async' show FutureOr;
 import 'dart:collection';
 import 'dart:convert';
 import 'dart:math' as math;
@@ -25,6 +26,8 @@ part 'src/json.dart';
 part 'src/inspect.dart';
 part 'src/debug_unicode.dart';
 part 'src/serde.dart';
+part 'src/model_codec.dart';
+part 'src/model_document.dart';
 part 'src/key.dart';
 part 'src/kind.dart';
 
